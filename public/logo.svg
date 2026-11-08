@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="#15172b" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">
+  <!-- 일산교회 교회당: 십자가, 곡선 지붕의 두 탑, 가운데 파란 유리 원통 -->
+  <path d="M5 58V37l10-3v24" fill="#e4e5ec"/>
+  <path d="M46 58V29h13v29" fill="#ffffff"/>
+  <path d="M50 34h5M50 39h5M50 44h5" stroke-width="1.4"/>
+  <path d="M21 58V27h22v31" fill="#4a77a3"/>
+  <path d="M21 36h22M21 45h22" stroke="#ffffff" stroke-width="2.4"/>
+  <path d="M25.5 27v31M38.5 27v31" stroke="#2f5578" stroke-width="1.3"/>
+  <path d="M14 58V22c3-4.5 7.5-5.5 11-3.5V58Z" fill="#ffffff"/>
+  <path d="M39 58V18c3.5-4 8.5-4.5 12-1.5V58Z" fill="#ffffff"/>
+  <path d="M32 6v15M27.5 10.5h9" stroke-width="2.2"/>
+  <path d="M3 58h58" stroke-width="2"/>
+</svg>

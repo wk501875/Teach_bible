@@ -9,16 +9,21 @@
   <link rel="stylesheet" href="styles.css" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-  <link rel="icon" href="/icon-192.png" />
+  <link rel="icon" href="/logo.svg" type="image/svg+xml" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="공과강사" />
 </head>
 <body>
+  <header class="brand-bar">
+    <img src="/logo.svg" alt="" class="brand-logo" width="36" height="36" />
+    <span class="brand-name">공과강사<small id="brandChurch">일산교회</small></span>
+  </header>
+
   <!-- 오늘 (내 공과) -->
   <section class="page" data-section="mine">
     <div class="page-head">
       <div class="titles">
-        <p class="eyebrow" id="mineEyebrow">일산교회 교회학교</p>
+        <p class="eyebrow" id="mineEyebrow"></p>
         <h1 id="mineTitle">내 공과</h1>
         <p class="sub" id="mineSub"></p>
       </div>

@@ -187,7 +187,8 @@ function renderMine() {
   const matched = loginName && names.find(n => n.replace(/\s/g, '') === loginName);
   if (matched) state.me = matched;
   const church = Object.values(state.schedules).at(-1)?.church || '일산교회';
-  $('#mineEyebrow').textContent = `${church} 교회학교`;
+  $('#mineEyebrow').textContent = '';
+  $('#brandChurch').textContent = church;
   $('#mineTitle').textContent = state.me ? `${state.me} 님의 공과` : '내 공과';
   $('#avatarBtn').innerHTML = state.user ? esc(state.user.name.slice(0, 1)) : svg('user');
 
@@ -301,7 +302,7 @@ function renderTable() {
   $('#nextMonth').disabled = state.monthIdx >= months.length - 1;
   if (!s) return renderNational(month);
   const [y, m] = month.split('-').map(Number);
-  $('#tableEyebrow').textContent = `${s.church || ''} 교회학교`;
+  $('#tableEyebrow').textContent = '';
   $('#tableSub').textContent = `${y}년 ${m}월`;
   const today = todayISO();
 
