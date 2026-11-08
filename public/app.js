@@ -19,6 +19,7 @@ const P = {
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   chevronLeft: '<path d="m15 18-6-6 6-6"/>', chevronRight: '<path d="m9 18 6-6-6-6"/>',
   close: '<path d="M18 6 6 18M6 6l12 12"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  check: '<path d="M5 12.5 10 17 19 7"/>',
   external: '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
 };
 const svg = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`;
@@ -35,7 +36,7 @@ const ls = {
 const state = {
   user: null, loginAvailable: false, adminLocked: false,
   months: [], schedules: {}, resources: {}, curriculum: {}, curriculumErrors: [],
-  me: ls.get('teach.me') || '', monthIdx: 0, dept: 'all', day: '', view: 'mine',
+  me: ls.get('teach.me') || '', monthIdx: 0, dept: 'all', day: '', view: 'mine', acks: new Set(), push: { supported: false, on: false, busy: false, msg: '' },
 };
 
 // ---------- 날짜 ----------
@@ -219,6 +220,11 @@ function renderMine() {
   if (next) {
     html += `<p class="section-label">다음 공과</p>${agendaHtml(next, { big: true, flag: next.date === today ? '오늘' : dday(next.date) })}`;
     const tasks = tasksHtml(next);
+    const acked = state.acks.has(next.date);
+    html += `<button class="check-row ${acked ? 'done' : ''}" data-ack="${next.date}">
+      <span class="box">${acked ? svg('check') : ''}</span>
+      <span><b>${acked ? '공과 준비 확인 완료' : '공과 준비를 확인했어요'}</b><small>${acked ? '이번 주 알림이 더 오지 않습니다' : '체크하기 전까지 매일 오전 9시에 알림이 갑니다'}</small></span>
+    </button>`;
     html += `<div class="actions">${nextInfo?.sermon ? `<button class="btn dark block" ${matAttrs(nextInfo.sermon)}>공과 말씀 영상 보기</button>` : ''}
       <button class="btn ${nextInfo?.sermon ? '' : 'block'}" ${resAttrs(next)}>메모</button></div>`;
     html += `<p class="section-label">자료</p><div class="card"><div class="tasks">${tasks || '<p class="empty">연결된 자료가 없습니다</p>'}</div></div>`;
@@ -260,9 +266,11 @@ function renderMine() {
 }
 $('#mineBody').addEventListener('click', e => {
   const me = e.target.closest('[data-me]');
-  if (me) { state.me = me.dataset.me; ls.set('teach.me', state.me); renderAll(); return; }
+  if (me) { setMe(me.dataset.me); return; }
   const day = e.target.closest('[data-day]');
-  if (day) { state.day = day.dataset.day; renderMine(); }
+  if (day) { state.day = day.dataset.day; renderMine(); return; }
+  const ack = e.target.closest('[data-ack]');
+  if (ack) toggleAck(ack.dataset.ack);
 });
 $('#avatarBtn').onclick = () => show('settings');
 
@@ -503,6 +511,13 @@ function renderSettings() {
   const names = teacherNames();
   const rows = [];
   const go = svg('chevronRight');
+  const p = state.push;
+  const pushSub = !p.supported ? (isIOS() ? '아이폰은 공유 → 홈 화면에 추가한 뒤 앱에서 켤 수 있습니다' : '이 브라우저는 알림을 지원하지 않습니다')
+    : !state.me ? '이름을 먼저 선택하세요'
+    : p.msg || (p.on ? '공과가 있는 주 월요일 오전 9시, 확인할 때까지 매일' : '공과가 있는 주에 알림을 받습니다');
+  rows.push(`<div class="set-row"><span class="txt"><b>공과 알림</b><small>${esc(pushSub)}</small>
+    ${p.on ? '<span class="sub-actions"><button class="btn small" id="pushTest">테스트 알림 보내기</button></span>' : ''}</span>
+    ${p.supported && state.me ? `<button class="toggle ${p.on ? 'on' : ''}" id="pushToggle" aria-label="공과 알림" ${p.busy ? 'disabled' : ''}></button>` : ''}</div>`);
   if (u) rows.push(`<button class="set-row" id="logoutBtn"><span class="txt"><b>로그아웃</b></span><span class="go">${go}</span></button>`);
   else if (state.loginAvailable) rows.push(`<button class="set-row" id="loginBtn"><span class="txt"><b>깨사모 로그인</b></span><span class="go">${go}</span></button>`);
   if (!u || !names.some(n => n.replace(/\s/g, '') === u.name.replace(/\s/g, ''))) {
@@ -517,8 +532,10 @@ function renderSettings() {
     await api('/api/logout', { method: 'POST' }).catch(() => {});
     state.user = null; renderAll();
   });
-  $('#meSelect')?.addEventListener('change', e => { state.me = e.target.value; ls.set('teach.me', state.me); renderAll(); });
+  $('#meSelect')?.addEventListener('change', e => setMe(e.target.value));
   $('#reloadBtn')?.addEventListener('click', () => location.reload());
+  $('#pushToggle')?.addEventListener('click', togglePush);
+  $('#pushTest')?.addEventListener('click', testPush);
 }
 $('#loginForm').addEventListener('submit', async e => {
   e.preventDefault();
@@ -532,6 +549,67 @@ $('#loginForm').addEventListener('submit', async e => {
   } catch (err) { $('#loginMsg').textContent = err.message; }
   finally { btn.disabled = false; }
 });
+
+// ---------- 공과 알림 · 준비 확인 ----------
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const urlB64ToBytes = s => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), c => c.charCodeAt(0));
+let swReg = null;
+async function initPush() {
+  state.push.supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  if (!state.push.supported) return;
+  try {
+    swReg = await navigator.serviceWorker.register('/sw.js');
+    const sub = await swReg.pushManager.getSubscription();
+    state.push.on = Boolean(sub) && Notification.permission === 'granted';
+  } catch { state.push.supported = false; }
+}
+async function saveSubscription(sub) {
+  await api('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), teacher: state.me }) });
+}
+async function togglePush() {
+  const p = state.push; if (p.busy) return;
+  p.busy = true; p.msg = ''; renderSettings();
+  try {
+    if (p.on) {
+      const sub = await swReg.pushManager.getSubscription();
+      if (sub) { await api('/api/push/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {}); await sub.unsubscribe(); }
+      p.on = false;
+    } else {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') throw new Error('알림 권한이 거부되었습니다. 브라우저 설정에서 허용해 주세요');
+      const { publicKey } = await api('/api/push/key');
+      const sub = (await swReg.pushManager.getSubscription()) || await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(publicKey) });
+      await saveSubscription(sub);
+      p.on = true;
+    }
+  } catch (err) { p.msg = err.message; }
+  p.busy = false; renderSettings();
+}
+async function testPush() {
+  const sub = await swReg?.pushManager.getSubscription();
+  if (!sub) return;
+  try { const r = await api('/api/push/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }); state.push.msg = r.ok ? '테스트 알림을 보냈습니다' : `보내지 못했습니다 (${r.status})`; }
+  catch (err) { state.push.msg = err.message; }
+  renderSettings();
+}
+async function loadAcks() {
+  if (!state.me) { state.acks = new Set(); return; }
+  try { state.acks = new Set(await api(`/api/ack?teacher=${encodeURIComponent(state.me)}`)); } catch { /* 무시 */ }
+}
+async function toggleAck(date) {
+  const on = !state.acks.has(date);
+  on ? state.acks.add(date) : state.acks.delete(date);
+  renderMine();
+  try { await api('/api/ack', { method: on ? 'POST' : 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ teacher: state.me, date }) }); }
+  catch { on ? state.acks.delete(date) : state.acks.add(date); renderMine(); }
+}
+async function setMe(name) {
+  state.me = name; ls.set('teach.me', name);
+  renderAll();
+  await loadAcks(); renderMine();
+  // 알림을 켜 둔 기기는 이름이 바뀌면 구독 정보도 갱신
+  if (state.push.on && name) { const sub = await swReg?.pushManager.getSubscription(); if (sub) saveSubscription(sub).catch(() => {}); }
+}
 
 // ---------- 화면 전환 ----------
 function renderAll() { renderMine(); renderTable(); renderSettings(); }
@@ -617,4 +695,8 @@ applyIcons();
   catch (err) { $('#mineBody').innerHTML = `<div class="card empty">서버에 연결할 수 없습니다: ${esc(err.message)}</div>`; return; }
   renderAll();
   renderEditor(state.months.at(-1) || todayISO().slice(0, 7));
+  await Promise.all([loadAcks(), initPush()]);
+  renderMine(); renderSettings();
+  // 로그인 이름이 배정표와 맞으면 알림 구독의 이름도 최신으로
+  if (state.push.on && state.me) { const sub = await swReg?.pushManager.getSubscription(); if (sub) saveSubscription(sub).catch(() => {}); }
 })();

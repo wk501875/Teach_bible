@@ -1,6 +1,7 @@
 // 공과강사 Cloudflare Worker: 정적 화면(ASSETS) + 배정표/메모 저장(KV) + 전국교회학교 연간공과 일정
 import { getSchedule, SOURCES } from './jbch-school.js';
 import { handleAuth } from './auth.js';
+import { handlePush, runDailyReminders } from './push.js';
 import seed202610 from '../data/schedule-2026-10.json';
 import seed202611 from '../data/schedule-2026-11.json';
 
@@ -24,6 +25,8 @@ function validSchedule(s, month) {
     s.weeks.every(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date) && w.cells && typeof w.cells === 'object');
 }
 
+const loadSchedule = async (env, month) => (await env.DATA.get(`schedule:${month}`, 'json')) || SEED[month] || null;
+
 async function listMonths(env) {
   const months = new Set(Object.keys(SEED));
   let cursor;
@@ -40,6 +43,8 @@ async function handleApi(req, env, url) {
 
   const auth = await handleAuth(req, env, path);
   if (auth) return auth;
+  const push = await handlePush(req, env, path, url);
+  if (push) return push;
 
   if (path === '/api/status' && req.method === 'GET') {
     // 설정 확인용: 값은 절대 보내지 않고 들어 있는지만 알려줌
@@ -52,7 +57,7 @@ async function handleApi(req, env, url) {
   if (m && MONTH_RE.test(m[1])) {
     const month = m[1];
     if (req.method === 'GET') {
-      const data = (await env.DATA.get(`schedule:${month}`, 'json')) || SEED[month];
+      const data = await loadSchedule(env, month);
       return data ? json(data) : json({ error: '배정표 없음' }, 404);
     }
     if (req.method === 'PUT') {
@@ -154,5 +159,9 @@ export default {
       catch (err) { return json({ error: err.message }, 500); }
     }
     return env.ASSETS.fetch(req);
+  },
+  // 매일 00:00 UTC = 오전 9시 (KST): 이번 주 공과 알림
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runDailyReminders(env, month => loadSchedule(env, month)).then(r => console.log('reminders', JSON.stringify(r))));
   },
 };
