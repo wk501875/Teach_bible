@@ -101,8 +101,20 @@ dialog::backdrop { background: rgba(0,0,0,.4); }
 }
 
 .mats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-.mat { font-size: .8rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); color: var(--text); text-decoration: none; white-space: nowrap; }
+.mat { font: inherit; font-size: .8rem; cursor: pointer; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); color: var(--text); text-decoration: none; white-space: nowrap; }
 .mat.pdf { border-color: var(--primary); }
 .res-auto { margin: 8px 0 4px; padding: 10px; border-radius: 8px; background: var(--bg); }
 .res-auto:empty { display: none; }
 .res-auto .mat { background: var(--surface); }
+
+.linkbtn { font: inherit; background: none; border: 0; padding: 0; color: var(--primary); text-decoration: underline; cursor: pointer; text-align: left; }
+dialog.viewer { width: min(1000px, calc(100vw - 16px)); height: calc(100vh - 32px); max-height: none; padding: 12px; }
+dialog.viewer[open] { display: flex; flex-direction: column; }
+.viewer-actions { display: flex; align-items: center; gap: 6px; }
+.viewer-actions form { margin: 0; }
+.viewer-body { flex: 1; overflow: auto; margin-top: 8px; background: var(--bg); border-radius: 8px; padding: 8px; text-align: center; }
+.viewer-body canvas { display: block; margin: 0 auto 8px; max-width: 100%; box-shadow: 0 1px 4px rgba(0,0,0,.15); background: #fff; }
+.viewer-body audio { width: 100%; margin-top: 40px; }
+.viewer-msg { color: var(--muted); padding: 40px 16px; }
+.video { position: relative; width: 100%; aspect-ratio: 16 / 9; }
+.video iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; border-radius: 8px; }

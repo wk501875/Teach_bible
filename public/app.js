@@ -111,12 +111,17 @@ function autoHtml(a) {
   const hide = HIDE[a.dept] || [];
   const mats = l.materials.filter(m => !hide.some(h => m.label.includes(h)))
     .sort((x, y) => (KIND_ORDER[x.kind] ?? 9) - (KIND_ORDER[y.kind] ?? 9));
-  const icon = { youtube: '▶', pdf: '📄', hwp: '📝', audio: '🎧', file: '⬇' };
+  const icon = { youtube: '▶', pdf: '📄', hwp: '⬇', audio: '🎧', file: '↗' };
   const sermon = mats.find(m => m.kind === 'youtube');
+  const btn = (m, text, cls = 'mat') => {
+    const ext = (m.url.split('?')[0].split('.').pop() || '').toLowerCase();
+    const name = `${l.no ?? ''}과 ${l.title} ${m.label}${['pdf', 'hwp', 'mp3'].includes(ext) ? '.' + ext : ''}`;
+    return `<button type="button" class="${cls} ${m.kind}" data-mat="${m.kind}" data-url="${esc(m.url)}" data-name="${esc(name)}">${text}</button>`;
+  };
   return `
     <div class="res-row"><span class="k">📘 교재</span><span class="v">${esc(sourceLabel(a.dept))} <b>${l.no ?? ''}과</b> 「${esc(l.title)}」 · ${esc(l.preacher)} <span class="chip">${esc(l.date.slice(5).replace('-', '/'))} 전국</span></span></div>
-    ${sermon ? `<div class="res-row"><span class="k">▶️ 영상</span><span class="v"><a href="${esc(sermon.url)}" target="_blank" rel="noopener">${esc(sermon.label.replace('설교 영상', '공과 말씀 영상'))} 보기</a></span></div>` : ''}
-    <div class="mats">${mats.filter(m => m !== sermon).map(m => `<a class="mat ${m.kind}" href="${esc(m.url)}" target="_blank" rel="noopener">${icon[m.kind] || ''} ${esc(m.label)}</a>`).join('')}</div>`;
+    ${sermon ? `<div class="res-row"><span class="k">▶️ 영상</span><span class="v">${btn(sermon, `${esc(sermon.label.replace('설교 영상', '공과 말씀 영상'))} 보기`, 'linkbtn')}</span></div>` : ''}
+    <div class="mats">${mats.filter(m => m !== sermon).map(m => btn(m, `${icon[m.kind] || ''} ${esc(m.label)}`)).join('')}</div>`;
 }
 
 function resourceHtml(a) {
@@ -201,6 +206,8 @@ $('#nextMonth').onclick = () => { state.monthIdx++; renderTable(); };
 // ---------- 자료 링크 수정 ----------
 let resEditing = '';
 document.addEventListener('click', e => {
+  const mat = e.target.closest('[data-mat]');
+  if (mat) { e.stopPropagation(); openMaterial(mat.dataset.mat, mat.dataset.url, mat.dataset.name); return; }
   const el = e.target.closest('[data-res]');
   if (!el || !el.dataset.res) return;
   if (e.target.closest('a')) return;
@@ -341,3 +348,68 @@ $$('.nav-btn').forEach(b => (b.onclick = () => show(b.dataset.view)));
   renderEditor(state.months.at(-1) || todayISO().slice(0, 7));
   show(ls.get('teach.view') || 'mine');
 })();
+
+// ---------- 앱 안에서 자료 보기 / 받기 ----------
+const fileUrl = (url, name, dl) => `/api/file?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}${dl ? '&dl=1' : ''}`;
+const PDFJS = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174';
+let pdfjsReady;
+function loadPdfJs() {
+  pdfjsReady ??= new Promise((resolve, reject) => {
+    const sc = document.createElement('script');
+    sc.src = `${PDFJS}/pdf.min.js`;
+    sc.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = `${PDFJS}/pdf.worker.min.js`; resolve(window.pdfjsLib); };
+    sc.onerror = () => { pdfjsReady = null; reject(new Error('PDF 뷰어를 불러오지 못했습니다')); };
+    document.head.append(sc);
+  });
+  return pdfjsReady;
+}
+let viewerToken = 0;
+async function renderPdf(src, box, token) {
+  box.innerHTML = '<p class="viewer-msg">PDF 불러오는 중…</p>';
+  const res = await fetch(src);
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+  const [lib, data] = await Promise.all([loadPdfJs(), res.arrayBuffer()]);
+  const pdf = await lib.getDocument({ data }).promise;
+  if (token !== viewerToken) return;
+  box.innerHTML = '';
+  const width = Math.min(box.clientWidth || 800, 1000);
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    if (token !== viewerToken) return;
+    const base = page.getViewport({ scale: 1 });
+    const scale = width / base.width;
+    const ratio = window.devicePixelRatio || 1;
+    const vp = page.getViewport({ scale: scale * ratio });
+    const canvas = document.createElement('canvas');
+    canvas.width = vp.width; canvas.height = vp.height;
+    canvas.style.width = `${vp.width / ratio}px`;
+    box.append(canvas);
+    await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+  }
+}
+function downloadFile(url, name) {
+  const a = document.createElement('a');
+  a.href = fileUrl(url, name, true); a.download = name;
+  document.body.append(a); a.click(); a.remove();
+}
+function openMaterial(kind, url, name) {
+  if (kind === 'hwp') return downloadFile(url, name);
+  if (kind === 'file') return window.open(url, '_blank', 'noopener');
+  const dlg = $('#viewer'); const box = $('#viewerBody'); const token = ++viewerToken;
+  $('#viewerTitle').textContent = name.replace(/\.(pdf|mp3)$/, '');
+  const dl = $('#viewerDownload');
+  dl.classList.toggle('hidden', kind === 'youtube');
+  dl.onclick = () => downloadFile(url, name);
+  if (kind === 'youtube') {
+    const id = new URL(url).searchParams.get('v');
+    box.innerHTML = `<div class="video"><iframe src="https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}?autoplay=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>`;
+  } else if (kind === 'audio') {
+    box.innerHTML = `<audio controls autoplay src="${esc(fileUrl(url, name))}"></audio>`;
+  } else if (kind === 'pdf') {
+    renderPdf(fileUrl(url, name), box, token).catch(err => {
+      if (token === viewerToken) box.innerHTML = `<p class="viewer-msg">PDF를 열지 못했습니다: ${esc(err.message)}<br><a href="${esc(url)}" target="_blank" rel="noopener">원본 링크로 열기</a></p>`;
+    });
+  }
+  dlg.showModal();
+}
+$('#viewer').addEventListener('close', () => { viewerToken++; $('#viewerBody').innerHTML = ''; });

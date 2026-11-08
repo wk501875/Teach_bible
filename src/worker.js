@@ -91,7 +91,54 @@ async function handleApi(req, env, url) {
     return json({ year, schedules, errors });
   }
 
+  // 공과 자료 파일 중계: GET /api/file?url=...&name=...&dl=1
+  if (path === '/api/file' && req.method === 'GET') return proxyFile(req, url);
+
   return json({ error: 'not found' }, 404);
+}
+
+// 교회학교 자료 파일만 중계 (PDF, 한글, mp3). http 음성도 https로 들을 수 있게 됨.
+const FILE_HOSTS = new Set(['school.jbch.org', 'tv.jbch.org', 'www.jbch.org']);
+const EXT_TYPES = { pdf: 'application/pdf', hwp: 'application/x-hwp', mp3: 'audio/mpeg' };
+
+function allowedFileUrl(raw) {
+  try {
+    const u = new URL(raw);
+    return ['http:', 'https:'].includes(u.protocol) && FILE_HOSTS.has(u.hostname) ? u : null;
+  } catch { return null; }
+}
+
+async function proxyFile(req, url) {
+  const target = allowedFileUrl(url.searchParams.get('url') || '');
+  if (!target) return json({ error: '허용되지 않은 파일 주소입니다' }, 400);
+
+  const headers = { 'User-Agent': 'teach-bible/0.2' };
+  const range = req.headers.get('Range');
+  if (range) headers.Range = range;
+  const upstream = await fetch(target, { headers, redirect: 'follow', cf: { cacheTtl: 86400, cacheEverything: true } });
+  if (!allowedFileUrl(upstream.url)) return json({ error: '허용되지 않은 주소로 이동했습니다' }, 502);
+  if (!upstream.ok && upstream.status !== 206) return json({ error: `파일을 가져오지 못했습니다 (${upstream.status})` }, 502);
+
+  const ext = (target.pathname.split('.').pop() || '').toLowerCase();
+  let type = upstream.headers.get('Content-Type') || '';
+  if (type.includes('text/html')) {
+    // 파일 대신 웹페이지(로그인 화면 등)가 온 경우
+    return json({ error: '파일 대신 웹페이지가 왔습니다. 로그인이 필요한 파일일 수 있습니다.' }, 502);
+  }
+  if (!type || type === 'application/octet-stream') type = EXT_TYPES[ext] || 'application/octet-stream';
+
+  const name = (url.searchParams.get('name') || decodeURIComponent(target.pathname.split('/').pop() || 'file'))
+    .replace(/[\\/:*?"<>|\r\n]/g, '_').slice(0, 150);
+  const out = new Headers({
+    'Content-Type': type,
+    'Content-Disposition': `${url.searchParams.get('dl') ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(name)}`,
+    'Cache-Control': 'public, max-age=86400',
+    'X-Content-Type-Options': 'nosniff',
+  });
+  for (const h of ['Content-Length', 'Content-Range', 'Accept-Ranges', 'Last-Modified', 'ETag']) {
+    const v = upstream.headers.get(h); if (v) out.set(h, v);
+  }
+  return new Response(upstream.body, { status: upstream.status, headers: out });
 }
 
 export default {
