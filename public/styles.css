@@ -274,3 +274,4 @@ body.locked { padding-bottom: 0; }
 .gate-card { background: var(--surface); border-radius: 22px; padding: 20px 18px 16px; box-shadow: var(--shadow); text-align: left; }
 .gate-card .btn { margin-top: 4px; }
 .gate-note { margin: 18px 0 0; font-size: .8rem; color: var(--muted); line-height: 1.6; }
+.set-row .toggle:disabled { opacity: .5; cursor: progress; }

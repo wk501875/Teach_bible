@@ -516,7 +516,7 @@ function renderSettings() {
     : !p.supported ? (isIOS() ? '아이폰은 공유 → 홈 화면에 추가한 뒤 앱에서 켤 수 있습니다' : '이 브라우저는 알림을 지원하지 않습니다')
     : !state.me ? '이름을 먼저 선택하세요'
     : p.msg || (p.on ? '공과가 있는 주 월요일 오전 9시, 확인할 때까지 매일' : '공과가 있는 주에 알림을 받습니다');
-  rows.push(`<div class="set-row"><span class="txt"><b>공과 알림</b><small ${p.msg && !p.on ? 'style="color:var(--red)"' : ''}>${esc(pushSub)}</small>
+  rows.push(`<div class="set-row"><span class="txt"><b>공과 알림</b><small ${p.error ? 'style="color:var(--red)"' : p.busy ? 'style="color:var(--blue)"' : ''}>${esc(pushSub)}</small>
     ${p.on ? '<span class="sub-actions"><button class="btn small" id="pushTest">테스트 알림 보내기</button></span>' : ''}</span>
     ${p.supported && state.me ? `<button class="toggle ${p.on ? 'on' : ''}" id="pushToggle" aria-label="공과 알림" ${p.busy ? 'disabled' : ''}></button>` : ''}</div>`);
   if (u) rows.push(`<button class="set-row" id="logoutBtn"><span class="txt"><b>로그아웃</b></span><span class="go">${go}</span></button>`);
@@ -564,31 +564,41 @@ async function initPush() {
 async function saveSubscription(sub) {
   await api('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), teacher: state.me }) });
 }
+// 일정 시간 안에 끝나지 않으면 오류
+const withTimeout = (promise, ms, msg) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
+function pushStep(msg) { state.push.msg = msg; renderSettings(); }
 async function togglePush() {
   const p = state.push; if (p.busy) return;
-  p.busy = true; p.msg = ''; renderSettings();
+  p.busy = true; p.error = false;
   try {
     if (p.on) {
-      const sub = await swReg.pushManager.getSubscription();
+      pushStep('알림을 끄는 중…');
+      const sub = await swReg?.pushManager.getSubscription();
       if (sub) { await api('/api/push/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {}); await sub.unsubscribe(); }
-      p.on = false;
+      p.on = false; p.msg = '';
     } else {
-      if (Notification.permission === 'denied') throw new Error('알림이 차단되어 있습니다. 주소창 왼쪽 자물쇠 → 권한 → 알림을 허용으로 바꿔 주세요');
-      const perm = await Notification.requestPermission();
-      if (perm !== 'granted') throw new Error('알림 권한을 허용해야 합니다');
-      swReg = swReg || await navigator.serviceWorker.register('/sw.js');
-      const reg = await navigator.serviceWorker.ready; // 서비스 워커가 활성화될 때까지 대기
+      if (Notification.permission === 'denied') throw new Error('알림이 차단되어 있습니다. 주소창 왼쪽 아이콘 → 권한 → 알림을 허용으로 바꾼 뒤 다시 눌러 주세요');
+      if (Notification.permission !== 'granted') {
+        // 크롬은 허용 창 대신 주소창에 작은 종 아이콘만 띄우기도 함
+        pushStep('알림 허용을 기다리는 중… 허용 창이 안 보이면 주소창의 종 모양 아이콘을 눌러 허용해 주세요');
+        const perm = await withTimeout(Notification.requestPermission(), 90000, '알림 허용 응답이 없습니다. 주소창의 종 모양 아이콘이나 사이트 설정에서 알림을 허용해 주세요');
+        if (perm !== 'granted') throw new Error('알림을 허용해야 받을 수 있습니다. 주소창 왼쪽 아이콘 → 권한 → 알림을 허용해 주세요');
+      }
+      pushStep('알림 등록 중…');
+      if (!swReg) swReg = await navigator.serviceWorker.register('/sw.js');
+      // 활성화될 때까지 최대 10초 대기, 안 되면 등록 객체로 진행
+      const reg = await withTimeout(navigator.serviceWorker.ready, 10000, 'sw-timeout').catch(() => swReg);
       swReg = reg;
       const { publicKey } = await api('/api/push/key');
       let sub = await reg.pushManager.getSubscription();
       if (!sub) {
-        try { sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(publicKey) }); }
-        catch (e) { throw new Error(`알림 등록 실패: ${e.name || ''} ${e.message || e}`.trim()); }
+        try { sub = await withTimeout(reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(publicKey) }), 20000, '알림 서버 응답이 없습니다. 인터넷 연결을 확인하고 다시 눌러 주세요'); }
+        catch (e) { throw new Error(e.message?.includes('알림 서버') ? e.message : `알림 등록 실패: ${e.name || ''} ${e.message || e}`.trim()); }
       }
       await saveSubscription(sub);
-      p.on = true;
+      p.on = true; p.msg = '';
     }
-  } catch (err) { p.msg = err.message || String(err); console.error('push', err); }
+  } catch (err) { p.msg = err.message || String(err); p.error = true; console.error('push', err); }
   p.busy = false; renderSettings();
 }
 async function testPush() {
