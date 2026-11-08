@@ -9,17 +9,15 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <div class="deco" aria-hidden="true"><i class="b1"></i><i class="b2"></i><i class="b3"></i><span class="star s1">★</span><span class="star s2">★</span><span class="star s3">★</span></div>
-
   <!-- 오늘 (내 공과) -->
   <section class="page" data-section="mine">
     <div class="page-head">
       <div class="titles">
-        <p class="eyebrow" id="mineEyebrow">공과강사 · 내 공과</p>
+        <p class="eyebrow" id="mineEyebrow">일산교회 교회학교</p>
         <h1 id="mineTitle">내 공과</h1>
         <p class="sub" id="mineSub"></p>
       </div>
-      <button class="avatar-btn" id="avatarBtn" aria-label="설정">🙂</button>
+      <button class="avatar-btn" id="avatarBtn" aria-label="설정"></button>
     </div>
     <div id="mineBody"></div>
   </section>
@@ -28,13 +26,13 @@
   <section class="page hidden" data-section="table">
     <div class="page-head">
       <div class="titles">
-        <p class="eyebrow" id="tableEyebrow">SCHEDULE · 배정표</p>
-        <h1>공과 배정표</h1>
+        <p class="eyebrow" id="tableEyebrow"></p>
+        <h1>배정표</h1>
         <p class="sub" id="tableSub"></p>
       </div>
       <div class="month-nav">
-        <button class="round" id="prevMonth" aria-label="이전 달">‹</button>
-        <button class="round" id="nextMonth" aria-label="다음 달">›</button>
+        <button class="round" id="prevMonth" aria-label="이전 달" data-icon="chevronLeft"></button>
+        <button class="round" id="nextMonth" aria-label="다음 달" data-icon="chevronRight"></button>
       </div>
     </div>
     <div class="chips scroll" id="deptChips"></div>
@@ -45,9 +43,8 @@
   <section class="page hidden" data-section="edit">
     <div class="page-head">
       <div class="titles">
-        <p class="eyebrow">MASTER DATA · 배정표 입력</p>
         <h1>배정표 입력</h1>
-        <p class="sub">카톡방에서 받은 배정표를 매달 입력하세요</p>
+        <p class="sub">매달 받은 배정표를 입력합니다</p>
       </div>
     </div>
     <div class="stats" id="editStats"></div>
@@ -60,12 +57,12 @@
           <input id="editChurch" value="일산교회" />
         </label>
       </div>
-      <p class="hint">담당자는 배정표처럼 <b>이름+표시</b>로 적으세요 (예: <code>유석준B</code>). 집회나 행사 주는 그 일정을 그대로 적으면 됩니다.</p>
+      <p class="hint">담당자는 배정표 표기 그대로 적습니다 (예: 유석준B). 집회·행사 주는 일정 이름을 적으면 됩니다.</p>
     </div>
     <div id="editBody"></div>
     <div class="save-bar">
       <span class="msg" id="editMsg"></span>
-      <button class="btn small" id="addWeek">＋ 주 추가</button>
+      <button class="btn small" id="addWeek">주 추가</button>
       <button class="btn dark small" id="saveSchedule">저장</button>
     </div>
   </section>
@@ -74,35 +71,32 @@
   <section class="page hidden" data-section="settings">
     <div class="page-head">
       <div class="titles">
-        <p class="eyebrow">공과강사 v1.0 · 일산교회</p>
         <h1>설정</h1>
-        <p class="sub">로그인과 앱 정보</p>
       </div>
     </div>
     <div class="card" id="profileCard"></div>
     <div id="settingsRows"></div>
-    <p class="foot-note">자료 출처: 전국교회학교 연간공과 일정 · 생명의말씀선교회</p>
+    <p class="foot-note">공과 자료 출처: 전국교회학교 연간공과 일정</p>
   </section>
 
   <!-- 하단 탭바 -->
   <nav class="tabbar" role="tablist">
-    <button class="nav-btn active" data-view="mine"><span class="emo">🏠</span>오늘</button>
-    <button class="nav-btn" data-view="table"><span class="emo">🗓️</span>배정표</button>
-    <button class="nav-btn" data-view="edit"><span class="emo">📝</span>입력</button>
-    <button class="nav-btn" data-view="settings"><span class="emo">⚙️</span>설정</button>
+    <button class="nav-btn active" data-view="mine"><span data-icon="home"></span>내 공과</button>
+    <button class="nav-btn" data-view="table"><span data-icon="grid"></span>배정표</button>
+    <button class="nav-btn" data-view="edit"><span data-icon="edit"></span>입력</button>
+    <button class="nav-btn" data-view="settings"><span data-icon="settings"></span>설정</button>
   </nav>
 
   <!-- 공과 자료 · 메모 -->
   <dialog id="resDialog" class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <span class="sheet-emo">📖</span>
-      <div class="sheet-title"><h2 id="resTitle"></h2><p id="resSub">공과 자료</p></div>
-      <form method="dialog"><button class="close-btn" aria-label="닫기">✕</button></form>
+      <div class="sheet-title"><h2 id="resTitle"></h2><p id="resSub"></p></div>
+      <form method="dialog"><button class="close-btn" aria-label="닫기" data-icon="close"></button></form>
     </div>
     <div class="sheet-body">
       <div id="resAuto"></div>
-      <p class="section-label">추가 자료 · 메모 <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:500">모든 강사가 함께 봐요</span></p>
+      <p class="section-label">메모 · 추가 자료</p>
       <label class="field">추가 자료 이름
         <input id="resTextbook" />
       </label>
@@ -112,7 +106,7 @@
       <label class="field">추가 영상 링크
         <input id="resYoutube" type="url" placeholder="https://youtu.be/..." />
       </label>
-      <label class="field">메모 (본문 구절, 준비물 등)
+      <label class="field">메모
         <textarea id="resNote" rows="3"></textarea>
       </label>
       <div class="actions">
@@ -127,9 +121,8 @@
   <dialog id="loginDialog" class="sheet">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <span class="sheet-emo">🔐</span>
-      <div class="sheet-title"><h2>깨사모 로그인</h2><p>로그인하면 내 공과를 자동으로 찾아요</p></div>
-      <form method="dialog"><button class="close-btn" aria-label="닫기">✕</button></form>
+      <div class="sheet-title"><h2>깨사모 로그인</h2></div>
+      <form method="dialog"><button class="close-btn" aria-label="닫기" data-icon="close"></button></form>
     </div>
     <form id="loginForm" class="sheet-body">
       <label class="field">깨사모 아이디
@@ -138,7 +131,7 @@
       <label class="field">비밀번호
         <input id="loginPw" type="password" autocomplete="current-password" required />
       </label>
-      <p class="hint">한 번 로그인하면 이 기기에서 계속 로그인 상태가 유지돼요. 비밀번호는 저장하지 않아요.</p>
+      <p class="hint">이 기기에서 로그인이 유지됩니다. 비밀번호는 저장하지 않습니다.</p>
       <button class="btn dark block" id="loginSubmit">로그인</button>
       <p class="msg center" id="loginMsg"></p>
     </form>
@@ -148,10 +141,9 @@
   <dialog id="viewer" class="sheet viewer">
     <div class="sheet-handle"></div>
     <div class="sheet-head">
-      <span class="sheet-emo" id="viewerIcon">📄</span>
-      <div class="sheet-title"><h2 id="viewerTitle"></h2><p id="viewerSub">공과 자료</p></div>
-      <button class="btn small" id="viewerDownload">⬇<span class="lbl"> 다운로드</span></button>
-      <form method="dialog"><button class="close-btn" aria-label="닫기">✕</button></form>
+      <div class="sheet-title"><h2 id="viewerTitle"></h2><p id="viewerSub"></p></div>
+      <button class="btn small" id="viewerDownload">다운로드</button>
+      <form method="dialog"><button class="close-btn" aria-label="닫기" data-icon="close"></button></form>
     </div>
     <div class="viewer-body" id="viewerBody"></div>
   </dialog>

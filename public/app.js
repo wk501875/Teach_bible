@@ -9,10 +9,20 @@ const DEPTS = [
 ];
 const YOUTH = { key: 'youth', label: '중고등부 (통합)', short: '중고등' };
 const deptLabel = k => (k === 'youth' ? YOUTH.label : DEPTS.find(d => d.key === k)?.label || k);
-const DEPT_EMO = { kinder: '🧸', elLow: '✏️', elHigh: '📘', middle: '🎒', high: '🎓', youth: '🎒' };
 const DEPT_BAR = { kinder: '#3d7bff', elLow: '#22a45d', elHigh: '#7c5cff', middle: '#ff8a4c', high: '#ff5c9a', youth: '#ff8a4c' };
-const MAT_EMO = { youtube: '🎬', pdf: '📄', hwp: '📝', audio: '🎧', file: '🔗' };
-const MAT_HINT = { youtube: '앱 안에서 재생', pdf: '앱 안에서 보기', hwp: '바로 다운로드', audio: '앱 안에서 듣기', file: '새 창에서 열기' };
+const MAT_KIND = { youtube: '영상', pdf: 'PDF', hwp: 'HWP', audio: '음성', file: '링크' };
+// 선 아이콘
+const P = {
+  home: '<path d="M3 11 12 4l9 7"/><path d="M5 10v10h14V10"/>',
+  grid: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  chevronLeft: '<path d="m15 18-6-6 6-6"/>', chevronRight: '<path d="m9 18 6-6-6-6"/>',
+  close: '<path d="M18 6 6 18M6 6l12 12"/>', user: '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+  external: '<path d="M14 4h6v6"/><path d="M20 4 10 14"/><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/>',
+};
+const svg = name => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`;
+function applyIcons(root = document) { root.querySelectorAll('[data-icon]:empty').forEach(el => { el.innerHTML = svg(el.dataset.icon); }); }
 
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
@@ -131,17 +141,21 @@ function tasksHtml(a, withManual = true) {
   const info = lessonInfo(a);
   const r = state.resources[a.title] || {};
   const rows = [];
-  const row = (emoCls, emo, title, sub, attrs, tag = 'button') =>
-    `<${tag} ${tag === 'button' ? 'type="button"' : ''} class="task" ${attrs}><span class="emo ${emoCls}">${emo}</span><span class="txt"><b>${title}</b><small>${sub}</small></span><span class="go">›</span></${tag}>`;
+  const row = (kind, title, sub, attrs, tag = 'button') =>
+    `<${tag} ${tag === 'button' ? 'type="button"' : ''} class="task" ${attrs}><span class="kind ${kind}">${MAT_KIND[kind] || '자료'}</span><span class="txt"><b>${title}</b><small>${sub}</small></span><span class="go">${svg(kind === 'file' ? 'external' : 'chevronRight')}</span></${tag}>`;
   if (info) {
-    for (const m of info.mats) rows.push(row(m.kind, MAT_EMO[m.kind] || '📄', esc(m === info.sermon ? '공과 말씀 영상' : m.label), MAT_HINT[m.kind] || '', matAttrs(m)));
+    for (const m of info.mats) {
+      const title = m === info.sermon ? '공과 말씀' : m.label.replace(/\s*(영상|PDF|한글|음성|Down)$/i, '') || m.label;
+      const label = m.label.endsWith('Down') ? '설교 영상 파일 (구글드라이브)' : title;
+      rows.push(row(m.kind, esc(label), '', matAttrs(m)));
+    }
   } else if (state.curriculumErrors.length) {
-    rows.push(row('file', '🔗', '연간공과 일정을 불러오지 못했어요', '전국교회학교에서 직접 확인', `href="${SCHOOL_URL}" target="_blank" rel="noopener"`, 'a'));
+    rows.push(row('file', '연간공과 일정을 불러오지 못했습니다', '전국교회학교 사이트에서 확인', `href="${SCHOOL_URL}" target="_blank" rel="noopener"`, 'a'));
   }
   if (withManual) {
-    if (r.textbook || r.textbookUrl) rows.push(row('file', '📎', esc(r.textbook || '추가 자료'), '강사 추가 자료', r.textbookUrl ? `href="${esc(r.textbookUrl)}" target="_blank" rel="noopener"` : '', 'a'));
-    if (r.youtube) rows.push(row('youtube', '🎬', '추가 영상', '강사 추가 자료', `href="${esc(r.youtube)}" target="_blank" rel="noopener"`, 'a'));
-    if (r.note) rows.push(`<div class="task"><span class="emo note">🗒️</span><span class="txt"><b>메모</b><small>${esc(r.note)}</small></span></div>`);
+    if (r.textbook || r.textbookUrl) rows.push(row('file', esc(r.textbook || '추가 자료'), '', r.textbookUrl ? `href="${esc(r.textbookUrl)}" target="_blank" rel="noopener"` : '', 'a'));
+    if (r.youtube) rows.push(row('youtube', '추가 영상', '', `href="${esc(r.youtube)}" target="_blank" rel="noopener"`, 'a'));
+    if (r.note) rows.push(`<div class="task"><span class="kind note">메모</span><span class="txt"><small style="color:var(--ink);font-size:.88rem">${esc(r.note)}</small></span></div>`);
   }
   return rows.join('');
 }
@@ -150,10 +164,10 @@ function tasksHtml(a, withManual = true) {
 function agendaHtml(a, { big = false, flag = '' } = {}) {
   const info = lessonInfo(a);
   const mine = state.me && a.teacher === state.me;
-  const meta = info ? `${info.source} ${info.l.no}과 · ${info.l.preacher}` : (a.teacher ? '' : '특별 일정');
+  const meta = info ? `${info.source} ${info.l.no}과` : '';
   return `<button type="button" class="agenda ${big ? 'big' : ''} ${mine && !big ? 'mine' : ''}" style="--bar:${info ? DEPT_BAR[a.dept] : '#ffd84d'}" ${resAttrs(a)}>
     ${flag ? `<span class="flag">${flag}</span>` : ''}
-    <div class="when"><span class="emo">${DEPT_EMO[a.dept] || '📘'}</span>${fmtDate(a.date)} · ${esc(deptLabel(a.dept))}</div>
+    <div class="when">${fmtDate(a.date)} · ${esc(deptLabel(a.dept))}</div>
     <div class="title">${esc(a.title)}</div>
     <div class="meta">${[a.teacher && `${esc(a.teacher)}${esc(a.tag || '')}`, meta && esc(meta)].filter(Boolean).join(' · ')}</div>
   </button>`;
@@ -167,9 +181,9 @@ function renderMine() {
   const matched = loginName && names.find(n => n.replace(/\s/g, '') === loginName);
   if (matched) state.me = matched;
   const church = Object.values(state.schedules).at(-1)?.church || '일산교회';
-  $('#mineEyebrow').textContent = `공과강사 · ${church} 교회학교`;
+  $('#mineEyebrow').textContent = `${church} 교회학교`;
   $('#mineTitle').textContent = state.me ? `${state.me} 님의 공과` : '내 공과';
-  $('#avatarBtn').textContent = state.user ? '😊' : '🙂';
+  $('#avatarBtn').innerHTML = state.user ? esc(state.user.name.slice(0, 1)) : svg('user');
 
   const body = $('#mineBody');
   const today = todayISO();
@@ -177,34 +191,34 @@ function renderMine() {
   const upcoming = mine.filter(a => a.date >= today);
   const past = mine.filter(a => a.date < today).reverse();
   const next = upcoming[0];
-  $('#mineSub').textContent = state.user && !matched ? `배정표에서 '${state.user.name}' 님을 찾지 못했어요. 아래에서 이름을 골라 주세요.`
-    : next ? `다음 공과까지 ${dday(next.date)} · ${fmtLong(next.date)}` : state.me ? '다가오는 배정이 없어요' : '이름을 고르거나 깨사모로 로그인하세요';
+  $('#mineSub').textContent = state.user && !matched ? `배정표에 '${state.user.name}' 이름이 없습니다. 이름을 선택하세요.`
+    : next ? `다음 공과 ${fmtLong(next.date)}` : state.me ? '예정된 공과가 없습니다' : '이름을 선택하거나 로그인하세요';
 
   let html = '';
   // 이름 선택 칩 (로그인으로 매칭되지 않았을 때)
   if (!matched) {
     html += `<div class="chips scroll">${names.map(n => `<button class="chip ${n === state.me ? 'active' : ''}" data-me="${esc(n)}">${esc(n)}</button>`).join('')}</div>`;
   }
-  if (!state.me) { body.innerHTML = html + `<div class="card empty">위에서 이름을 고르면 내 공과가 나타나요 👆</div>`; return; }
+  if (!state.me) { body.innerHTML = html + `<div class="card empty">이름을 선택하세요.</div>`; return; }
 
   // 통계 타일
   const month = todayISO().slice(0, 7);
   const thisMonth = mine.filter(a => a.date.startsWith(month)).length;
   const nextInfo = next ? lessonInfo(next) : null;
   html += `<div class="stats">
-    <div class="stat peach"><span class="emo">⏰</span><b>${next ? dday(next.date) : '-'}</b><small>다음 공과</small></div>
-    <div class="stat lav"><span class="emo">🗓️</span><b>${thisMonth}회</b><small>이번 달 배정</small></div>
-    <div class="stat green"><span class="emo">📚</span><b>${nextInfo ? nextInfo.mats.length : 0}개</b><small>준비 자료</small></div>
+    <div class="stat accent"><b>${next ? dday(next.date) : '-'}</b><small>다음 공과</small></div>
+    <div class="stat"><b>${thisMonth}회</b><small>이번 달</small></div>
+    <div class="stat"><b>${nextInfo ? nextInfo.mats.length : 0}</b><small>자료</small></div>
   </div>`;
 
   if (next) {
-    html += `<p class="section-label">⭐ 다음 공과</p>${agendaHtml(next, { big: true, flag: next.date === today ? 'TODAY' : dday(next.date) })}`;
+    html += `<p class="section-label">다음 공과</p>${agendaHtml(next, { big: true, flag: next.date === today ? '오늘' : dday(next.date) })}`;
     const tasks = tasksHtml(next);
-    html += `<p class="section-label">준비 자료 · TASKS</p><div class="card"><div class="tasks">${tasks || '<p class="empty">연결된 자료가 없어요</p>'}</div></div>`;
-    html += `<div class="actions">${nextInfo?.sermon ? `<button class="btn dark block" ${matAttrs(nextInfo.sermon)}>🎬 공과 말씀 영상 보기</button>` : ''}
-      <button class="btn ${nextInfo?.sermon ? '' : 'block'}" ${resAttrs(next)}>🗒️ 메모</button></div>`;
+    html += `<div class="actions">${nextInfo?.sermon ? `<button class="btn dark block" ${matAttrs(nextInfo.sermon)}>공과 말씀 영상 보기</button>` : ''}
+      <button class="btn ${nextInfo?.sermon ? '' : 'block'}" ${resAttrs(next)}>메모</button></div>`;
+    html += `<p class="section-label">자료</p><div class="card"><div class="tasks">${tasks || '<p class="empty">연결된 자료가 없습니다</p>'}</div></div>`;
   } else {
-    html += `<div class="card empty">다가오는 배정이 없어요. 새 배정표가 오면 '입력'에서 넣어 주세요 ✍️</div>`;
+    html += `<div class="card empty">예정된 공과가 없습니다.</div>`;
   }
 
   // 일요일별 이 주의 공과
@@ -213,14 +227,14 @@ function renderMine() {
   const curMonth = state.day.slice(0, 7);
   const monthWeeks = weeks.filter(w => w.date.startsWith(curMonth));
   if (monthWeeks.length) {
-    html += `<p class="section-label">📅 ${Number(curMonth.slice(5))}월 · 이 주의 공과</p>
+    html += `<p class="section-label">${Number(curMonth.slice(5))}월 주별 공과</p>
       <div class="days">${monthWeeks.map(w => {
         const isMine = Object.values(w.cells).some(c => c?.teacher === state.me);
         return `<button class="day ${w.date === state.day ? 'active' : ''} ${isMine ? 'mine' : ''}" data-day="${w.date}"><b>${Number(w.date.slice(8))}</b><small>${weekNo(w.date)}주차</small></button>`;
       }).join('')}</div>`;
     const w = weeks.find(x => x.date === state.day);
     const keys = w.cells.youth ? ['kinder', 'elLow', 'elHigh', 'youth'] : DEPTS.map(d => d.key);
-    html += keys.map(k => w.cells[k] && agendaHtml({ date: w.date, dept: k, ...w.cells[k] }, { flag: w.cells[k].teacher === state.me ? 'MINE' : '' })).filter(Boolean).join('');
+    html += keys.map(k => w.cells[k] && agendaHtml({ date: w.date, dept: k, ...w.cells[k] }, { flag: w.cells[k].teacher === state.me ? '내 공과' : '' })).filter(Boolean).join('');
   }
 
   if (upcoming.length > 1) html += `<p class="section-label">다가오는 공과</p>${upcoming.slice(1).map(a => agendaHtml(a, { flag: dday(a.date) })).join('')}`;
@@ -237,7 +251,7 @@ $('#avatarBtn').onclick = () => show('settings');
 
 // ---------- 배정표 ----------
 function renderDeptChips() {
-  const opts = [['all', '전체'], ['kinder', '🧸 유치부'], ['elLow', '✏️ 초등 1~3'], ['elHigh', '📘 초등 4~6'], ['youth', '🎒 중고등부'], ['me', '⭐ 내 공과']];
+  const opts = [['all', '전체'], ['me', '내 공과'], ['kinder', '유치부'], ['elLow', '초등 1~3'], ['elHigh', '초등 4~6'], ['youth', '중고등부']];
   $('#deptChips').innerHTML = opts.map(([k, l]) => `<button class="chip ${state.dept === k ? 'active' : ''}" data-dept-chip="${k}">${l}</button>`).join('');
 }
 $('#deptChips').addEventListener('click', e => {
@@ -251,10 +265,10 @@ function renderTable() {
   const s = state.schedules[month];
   $('#prevMonth').disabled = state.monthIdx <= 0;
   $('#nextMonth').disabled = state.monthIdx >= state.months.length - 1;
-  if (!s) { $('#tableEyebrow').textContent = 'SCHEDULE'; $('#tableSub').textContent = ''; $('#tableBody').innerHTML = `<div class="card empty">'입력'에서 이번 달 배정표를 넣어 주세요.</div>`; return; }
+  if (!s) { $('#tableEyebrow').textContent = ''; $('#tableSub').textContent = ''; $('#tableBody').innerHTML = `<div class="card empty">배정표가 없습니다.</div>`; return; }
   const [y, m] = month.split('-').map(Number);
-  $('#tableEyebrow').textContent = `SCHEDULE · ${y}년 ${m}월`;
-  $('#tableSub').textContent = `${s.church || ''} 교회학교 · ${s.weeks.length}주`;
+  $('#tableEyebrow').textContent = `${s.church || ''} 교회학교`;
+  $('#tableSub').textContent = `${y}년 ${m}월`;
   const today = todayISO();
 
   if (state.dept === 'all') {
@@ -263,20 +277,18 @@ function renderTable() {
       const mine = state.me && c.teacher === state.me;
       const info = lessonInfo({ ...c, dept: k, date });
       return `<button class="mx-c ${info ? k : 'event'} ${mine ? 'mine' : ''} ${span ? 'span2' : ''}" ${resAttrs({ ...c, dept: k, date })}>
-        <b>${esc(c.title)}</b><small>${mine ? '⭐ ' : ''}${esc(c.teacher)}${esc(c.tag || '')}${info && !mine ? ` · ${info.l.no}과` : ''}</small></button>`;
+        <b>${esc(c.title)}</b><small>${esc(c.teacher)}${esc(c.tag || '')}${info ? ` · ${info.l.no}과` : ''}</small></button>`;
     };
     const rows = s.weeks.map(w => {
       const youth = w.cells.youth ? cell(w.cells.youth, 'youth', w.date, true) : cell(w.cells.middle, 'middle', w.date) + cell(w.cells.high, 'high', w.date);
-      return `<div class="mx-d">${md(w.date)}<small>${w.date === today ? '오늘' : `${weekNo(w.date)}주`}</small></div>${cell(w.cells.kinder, 'kinder', w.date)}${cell(w.cells.elLow, 'elLow', w.date)}${cell(w.cells.elHigh, 'elHigh', w.date)}${youth}`;
+      return `<div class="mx-d">${md(w.date)}<small>${w.date === today ? '오늘' : ''}</small></div>${cell(w.cells.kinder, 'kinder', w.date)}${cell(w.cells.elLow, 'elLow', w.date)}${cell(w.cells.elHigh, 'elHigh', w.date)}${youth}`;
     }).join('');
-    const myCount = s.weeks.reduce((n, w) => n + Object.values(w.cells).filter(c => c?.teacher === state.me).length, 0);
     $('#tableBody').innerHTML = `
       <div class="matrix-wrap"><div class="matrix">
         <div class="mx-h">일자</div>${DEPTS.map(d => `<div class="mx-h">${d.short}</div>`).join('')}
         ${rows}
       </div></div>
-      ${state.me && myCount ? `<div class="alert">⭐ <span><b>${esc(state.me)} 님 공과 ${myCount}개</b>빨간 테두리 칸이 내 공과예요</span></div>` : ''}
-      <div class="legend"><span><i style="background:var(--blue-soft)"></i>유치부</span><span><i style="background:var(--green-soft)"></i>초등 1~3</span><span><i style="background:var(--lav-soft)"></i>초등 4~6</span><span><i style="background:var(--peach-soft)"></i>중등·중고등</span><span><i style="background:var(--pink-soft)"></i>고등부</span><span><i style="background:var(--yellow)"></i>집회·행사</span></div>`;
+      <div class="legend"><span><i style="background:var(--blue-soft)"></i>유치부</span><span><i style="background:var(--green-soft)"></i>초등 1~3</span><span><i style="background:var(--lav-soft)"></i>초등 4~6</span><span><i style="background:var(--peach-soft)"></i>중등·중고등</span><span><i style="background:var(--pink-soft)"></i>고등부</span><span><i style="background:var(--yellow-soft)"></i>집회·행사</span>${state.me ? '<span><i style="background:#fff;box-shadow:inset 0 0 0 2px var(--pink)"></i>내 공과</span>' : ''}</div>`;
     return;
   }
   // 부서별 / 내 공과 목록
@@ -285,10 +297,10 @@ function renderTable() {
   const html = s.weeks.map(w => {
     const items = Object.entries(w.cells).filter(([k, c]) => c && match(k, c))
       .sort(([a], [b]) => DEPT_ORDER.indexOf(a) - DEPT_ORDER.indexOf(b))
-      .map(([k, c]) => agendaHtml({ date: w.date, dept: k, ...c }, { flag: w.date === today ? 'TODAY' : '' })).join('');
-    return items ? `<p class="section-label">${fmtLong(w.date)} · ${weekNo(w.date)}주차</p>${items}` : '';
+      .map(([k, c]) => agendaHtml({ date: w.date, dept: k, ...c }, { flag: w.date === today ? '오늘' : '' })).join('');
+    return items ? `<p class="section-label">${fmtLong(w.date)}</p>${items}` : '';
   }).join('');
-  $('#tableBody').innerHTML = html || `<div class="card empty">${state.dept === 'me' ? (state.me ? '이번 달 내 공과가 없어요' : '설정에서 이름을 고르거나 로그인하세요') : '배정이 없어요'}</div>`;
+  $('#tableBody').innerHTML = html || `<div class="card empty">${state.dept === 'me' ? (state.me ? '이번 달에는 공과가 없습니다' : '이름을 선택하거나 로그인하세요') : '배정이 없습니다'}</div>`;
 }
 $('#prevMonth').onclick = () => { state.monthIdx--; renderTable(); };
 $('#nextMonth').onclick = () => { state.monthIdx++; renderTable(); };
@@ -307,12 +319,12 @@ document.addEventListener('click', e => {
   $('#resTitle').textContent = resEditing;
   $('#resSub').textContent = [a.date && fmtLong(a.date), a.dept && deptLabel(a.dept), info && `${info.source} ${info.l.no}과`].filter(Boolean).join(' · ');
   const tasks = a.dept ? tasksHtml(a, false) : '';
-  $('#resAuto').innerHTML = tasks ? `<p class="section-label">준비 자료</p><div class="tasks">${tasks}</div>` : '';
+  $('#resAuto').innerHTML = tasks ? `<div class="tasks">${tasks}</div>` : '';
   $('#resTextbook').value = r.textbook || '';
   $('#resTextbookUrl').value = r.textbookUrl || '';
   $('#resYoutube').value = r.youtube || '';
   $('#resNote').value = r.note || '';
-  $('#resMsg').innerHTML = `<a href="${SCHOOL_URL}" target="_blank" rel="noopener">전국교회학교 ↗</a>`;
+  $('#resMsg').textContent = '';
   $('#resDialog').showModal();
 });
 $('#resSave').onclick = async () => {
@@ -320,7 +332,7 @@ $('#resSave').onclick = async () => {
     textbook: $('#resTextbook').value.trim(), textbookUrl: $('#resTextbookUrl').value.trim(),
     youtube: $('#resYoutube').value.trim(), note: $('#resNote').value.trim(),
   };
-  if ([resource.textbookUrl, resource.youtube].some(u => u && !/^https?:\/\//.test(u))) { $('#resMsg').textContent = '링크는 https:// 로 시작해야 해요'; return; }
+  if ([resource.textbookUrl, resource.youtube].some(u => u && !/^https?:\/\//.test(u))) { $('#resMsg').textContent = '링크는 https://로 시작해야 합니다'; return; }
   const empty = !Object.values(resource).some(Boolean);
   try {
     await api('/api/resources', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: resEditing, resource: empty ? null : resource }) });
@@ -345,7 +357,7 @@ function parseWho(s) {
 }
 function editCell(key, label, c) {
   const v = cellValue(c);
-  return `<div class="edit-cell ${key}" data-key="${key}"><span class="dept">${DEPT_EMO[key] || ''} ${label}</span>
+  return `<div class="edit-cell ${key}" data-key="${key}"><span class="dept">${label}</span>
     <input data-k="title" placeholder="공과 제목" value="${esc(v.title)}" />
     <input data-k="who" placeholder="담당 (예: 유석준B)" value="${esc(v.who)}" /></div>`;
 }
@@ -356,7 +368,7 @@ function weekEditor(w) {
       <input type="date" data-k="date" value="${esc(w.date)}" />
       <label><input type="checkbox" data-k="youth" ${youth ? 'checked' : ''} /> 중고등 통합</label>
       <div class="spacer"></div>
-      <button class="x-btn" data-remove-week aria-label="이 주 삭제">✕</button>
+      <button class="x-btn" data-remove-week aria-label="이 주 삭제">${svg('close')}</button>
     </div>
     <div class="edit-grid">
       ${DEPTS.slice(0, 3).map(d => editCell(d.key, d.label, w.cells[d.key])).join('')}
@@ -378,9 +390,9 @@ function renderEditStats() {
   const teachers = new Set(cells.map(c => c.teacher).filter(Boolean)).size;
   const linked = cells.filter(c => lessonInfo(c)).length;
   $('#editStats').innerHTML = `
-    <div class="stat peach"><span class="emo">📅</span><b>${weeks.length}</b><small>주</small></div>
-    <div class="stat lav"><span class="emo">🧑‍🏫</span><b>${teachers}</b><small>강사</small></div>
-    <div class="stat green"><span class="emo">🔗</span><b>${linked}</b><small>자료 연결</small></div>`;
+    <div class="stat"><b>${weeks.length}</b><small>주</small></div>
+    <div class="stat"><b>${teachers}</b><small>강사</small></div>
+    <div class="stat"><b>${linked}</b><small>자료 연결</small></div>`;
 }
 function renderEditor(month) {
   $('#editMonth').value = month;
@@ -388,7 +400,7 @@ function renderEditor(month) {
   $('#editChurch').value = s?.church || '일산교회';
   const weeks = s?.weeks?.length ? s.weeks : sundaysOf(month).map(date => ({ date, cells: {} }));
   $('#editBody').innerHTML = weeks.map(weekEditor).join('');
-  $('#editMsg').textContent = s ? '저장된 배정표를 수정해요' : '새 배정표 · 일요일이 자동으로 채워졌어요';
+  $('#editMsg').textContent = s ? '' : '새 배정표';
   renderEditStats();
 }
 $('#editMonth').onchange = e => e.target.value && renderEditor(e.target.value);
@@ -429,7 +441,7 @@ $('#saveSchedule').onclick = async () => {
     state.schedules[month] = schedule;
     if (!state.months.includes(month)) { state.months.push(month); state.months.sort(); }
     state.monthIdx = state.months.indexOf(month);
-    $('#editMsg').textContent = '✅ 저장되었어요';
+    $('#editMsg').textContent = '저장했습니다';
     renderMine(); renderTable(); renderEditStats();
   } catch (err) { $('#editMsg').textContent = `저장 실패: ${err.message}`; }
 };
@@ -438,18 +450,19 @@ $('#saveSchedule').onclick = async () => {
 function renderSettings() {
   const u = state.user;
   $('#profileCard').innerHTML = u
-    ? `<div class="profile"><span class="face">😊</span><div><b>${esc(u.name)}</b><small>${esc(u.church || '')}${u.church ? ' · ' : ''}깨사모 ${esc(u.userid || '')}</small></div></div>`
-    : `<div class="profile"><span class="face">🙂</span><div><b>${esc(state.me || '로그인하지 않음')}</b><small>${state.me ? '이름을 직접 선택했어요' : '깨사모로 로그인하면 내 공과를 자동으로 찾아요'}</small></div></div>`;
+    ? `<div class="profile"><span class="face">${esc(u.name.slice(0, 1))}</span><div><b>${esc(u.name)}</b><small>${[u.church, u.userid].filter(Boolean).map(esc).join(' · ')}</small></div></div>`
+    : `<div class="profile"><span class="face">${state.me ? esc(state.me.slice(0, 1)) : svg('user')}</span><div><b>${esc(state.me || '로그인 안 됨')}</b><small>${state.me ? '직접 선택한 이름' : '깨사모로 로그인하세요'}</small></div></div>`;
   const names = teacherNames();
   const rows = [];
-  if (u) rows.push(`<button class="set-row" id="logoutBtn"><span class="emo">🚪</span><span class="txt"><b>로그아웃</b><small>이 기기에서 깨사모 로그아웃</small></span><span class="go">›</span></button>`);
-  else if (state.loginAvailable) rows.push(`<button class="set-row" id="loginBtn"><span class="emo">🔐</span><span class="txt"><b>깨사모 로그인</b><small>한 번 로그인하면 계속 유지돼요</small></span><span class="go">›</span></button>`);
+  const go = svg('chevronRight');
+  if (u) rows.push(`<button class="set-row" id="logoutBtn"><span class="txt"><b>로그아웃</b></span><span class="go">${go}</span></button>`);
+  else if (state.loginAvailable) rows.push(`<button class="set-row" id="loginBtn"><span class="txt"><b>깨사모 로그인</b></span><span class="go">${go}</span></button>`);
   if (!u || !names.some(n => n.replace(/\s/g, '') === u.name.replace(/\s/g, ''))) {
-    rows.push(`<div class="set-row"><span class="emo">🧑‍🏫</span><span class="txt"><b>내 이름 직접 선택</b><small>배정표에 있는 이름 중에서 골라요</small>
+    rows.push(`<div class="set-row"><span class="txt"><b>내 이름</b>
       <select id="meSelect"><option value="">선택하세요</option>${names.map(n => `<option ${n === state.me ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></span></div>`);
   }
-  rows.push(`<a class="set-row" href="${SCHOOL_URL}" target="_blank" rel="noopener"><span class="emo">📚</span><span class="txt"><b>전국교회학교 연간공과</b><small>머릿돌 · 참빛 원본 페이지</small></span><span class="go">↗</span></a>`);
-  rows.push(`<button class="set-row" id="reloadBtn"><span class="emo">🔄</span><span class="txt"><b>새로고침</b><small>배정표와 연간공과를 다시 불러와요</small></span><span class="go">›</span></button>`);
+  rows.push(`<a class="set-row" href="${SCHOOL_URL}" target="_blank" rel="noopener"><span class="txt"><b>전국교회학교 연간공과</b></span><span class="go">${svg('external')}</span></a>`);
+  rows.push(`<button class="set-row" id="reloadBtn"><span class="txt"><b>새로고침</b></span><span class="go">${go}</span></button>`);
   $('#settingsRows').innerHTML = rows.join('');
   $('#loginBtn')?.addEventListener('click', () => { $('#loginMsg').textContent = ''; $('#loginDialog').showModal(); $('#loginId').focus(); });
   $('#logoutBtn')?.addEventListener('click', async () => {
@@ -492,7 +505,7 @@ function loadPdfJs() {
     const sc = document.createElement('script');
     sc.src = `${PDFJS}/pdf.min.js`;
     sc.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = `${PDFJS}/pdf.worker.min.js`; resolve(window.pdfjsLib); };
-    sc.onerror = () => { pdfjsReady = null; reject(new Error('PDF 뷰어를 불러오지 못했어요')); };
+    sc.onerror = () => { pdfjsReady = null; reject(new Error('PDF 뷰어를 불러오지 못했습니다')); };
     document.head.append(sc);
   });
   return pdfjsReady;
@@ -530,8 +543,7 @@ function openMaterial(kind, url, name) {
   if (kind === 'file') return window.open(url, '_blank', 'noopener');
   const box = $('#viewerBody'); const token = ++viewerToken;
   $('#viewerTitle').textContent = name.replace(/\.(pdf|mp3)$/, '');
-  $('#viewerSub').textContent = MAT_HINT[kind] || '공과 자료';
-  $('#viewerIcon').textContent = MAT_EMO[kind] || '📄';
+  $('#viewerSub').textContent = MAT_KIND[kind] || '';
   const dl = $('#viewerDownload');
   dl.classList.toggle('hidden', kind === 'youtube');
   dl.onclick = () => downloadFile(url, name);
@@ -542,7 +554,7 @@ function openMaterial(kind, url, name) {
     box.innerHTML = `<audio controls autoplay src="${esc(fileUrl(url, name))}"></audio>`;
   } else if (kind === 'pdf') {
     renderPdf(fileUrl(url, name), box, token).catch(err => {
-      if (token === viewerToken) box.innerHTML = `<p class="viewer-msg">PDF를 열지 못했어요: ${esc(err.message)}<br><a href="${esc(url)}" target="_blank" rel="noopener">원본 링크로 열기</a></p>`;
+      if (token === viewerToken) box.innerHTML = `<p class="viewer-msg">PDF를 열지 못했습니다: ${esc(err.message)}<br><a href="${esc(url)}" target="_blank" rel="noopener">원본 링크로 열기</a></p>`;
     });
   }
   $('#viewer').showModal();
@@ -550,10 +562,11 @@ function openMaterial(kind, url, name) {
 $('#viewer').addEventListener('close', () => { viewerToken++; $('#viewerBody').innerHTML = ''; });
 
 // ---------- 시작 ----------
+applyIcons();
 (async () => {
   show(ls.get('teach.view') || 'mine');
   try { await loadAll(); }
-  catch (err) { $('#mineBody').innerHTML = `<div class="card empty">서버에 연결할 수 없어요: ${esc(err.message)}</div>`; return; }
+  catch (err) { $('#mineBody').innerHTML = `<div class="card empty">서버에 연결할 수 없습니다: ${esc(err.message)}</div>`; return; }
   renderAll();
   renderEditor(state.months.at(-1) || todayISO().slice(0, 7));
 })();
