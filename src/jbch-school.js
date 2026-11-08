@@ -78,6 +78,7 @@ export async function getSchedule(key, year, kv) {
   const res = await fetch(url, { signal: AbortSignal.timeout(20_000), headers: { 'User-Agent': 'teach-bible/0.1' } });
   if (!res.ok) throw new Error(`연간공과 일정 요청 실패 (${res.status})`);
   const data = { key, label: src.label, year, source: url, lessons: parseSchedule(await res.text()) };
-  if (kv && data.lessons.length) await kv.put(cacheKey, JSON.stringify(data), { expirationTtl: 6 * 60 * 60 });
+  // 아직 안 올라온 해(빈 표)는 1시간, 있는 해는 6시간 캐시 → 새 연간공과가 올라오면 1시간 안에 반영
+  if (kv) await kv.put(cacheKey, JSON.stringify(data), { expirationTtl: data.lessons.length ? 6 * 60 * 60 : 60 * 60 });
   return data;
 }
