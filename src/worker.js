@@ -1,6 +1,6 @@
 // 공과강사 Cloudflare Worker: 정적 화면(ASSETS) + 배정표/메모 저장(KV) + 전국교회학교 연간공과 일정
 import { getSchedule, SOURCES } from './jbch-school.js';
-import { handleAuth } from './auth.js';
+import { handleAuth, getSession } from './auth.js';
 import { handlePush, runDailyReminders } from './push.js';
 import seed202610 from '../data/schedule-2026-10.json';
 import seed202611 from '../data/schedule-2026-11.json';
@@ -44,13 +44,16 @@ async function handleApi(req, env, url) {
 
   const auth = await handleAuth(req, env, path);
   if (auth) return auth;
-  const push = await handlePush(req, env, path, url);
-  if (push) return push;
-
   if (path === '/api/status' && req.method === 'GET') {
     // 설정 확인용: 값은 절대 보내지 않고 들어 있는지만 알려줌
     return json({ adminLocked: Boolean(env.ADMIN_PASSWORD), keys: { JBCH_DEV_NAME: Boolean(env.JBCH_DEV_NAME), JBCH_TOKEN_ID: Boolean(env.JBCH_TOKEN_ID) } });
   }
+
+  // 여기부터는 깨사모 로그인한 사람만
+  if (!(await getSession(req, env))) return json({ error: '로그인이 필요합니다', needLogin: true }, 401);
+
+  const push = await handlePush(req, env, path, url);
+  if (push) return push;
 
   if (path === '/api/schedules' && req.method === 'GET') return json(await listMonths(env));
 

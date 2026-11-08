@@ -56,15 +56,13 @@ function dday(iso) {
 async function api(path, opts = {}) {
   const r = await fetch(path, opts);
   const data = await r.json().catch(() => ({}));
+  if (r.status === 401 && data.needLogin) lock();
   if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
   return data;
 }
 
 async function loadAll() {
-  const [months, resources, status, me] = await Promise.all([
-    api('/api/schedules'), api('/api/resources'), api('/api/status'), api('/api/me').catch(() => ({ loggedIn: false })),
-  ]);
-  state.user = me.loggedIn ? me : null; state.loginAvailable = me.loginAvailable !== false;
+  const [months, resources, status] = await Promise.all([api('/api/schedules'), api('/api/resources'), api('/api/status')]);
   state.months = months; state.resources = resources; state.adminLocked = status.adminLocked;
   const list = await Promise.all(months.map(m => api(`/api/schedules/${m}`)));
   state.schedules = Object.fromEntries(list.map(s => [s.month, s]));
@@ -522,7 +520,6 @@ function renderSettings() {
     ${p.on ? '<span class="sub-actions"><button class="btn small" id="pushTest">테스트 알림 보내기</button></span>' : ''}</span>
     ${p.supported && state.me ? `<button class="toggle ${p.on ? 'on' : ''}" id="pushToggle" aria-label="공과 알림" ${p.busy ? 'disabled' : ''}></button>` : ''}</div>`);
   if (u) rows.push(`<button class="set-row" id="logoutBtn"><span class="txt"><b>로그아웃</b></span><span class="go">${go}</span></button>`);
-  else if (state.loginAvailable) rows.push(`<button class="set-row" id="loginBtn"><span class="txt"><b>깨사모 로그인</b></span><span class="go">${go}</span></button>`);
   if (!u || !names.some(n => n.replace(/\s/g, '') === u.name.replace(/\s/g, ''))) {
     rows.push(`<div class="set-row"><span class="txt"><b>내 이름</b>
       <select id="meSelect"><option value="">선택하세요</option>${names.map(n => `<option ${n === state.me ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></span></div>`);
@@ -530,10 +527,9 @@ function renderSettings() {
   rows.push(`<a class="set-row" href="${SCHOOL_URL}" target="_blank" rel="noopener"><span class="txt"><b>전국교회학교 연간공과</b></span><span class="go">${svg('external')}</span></a>`);
   rows.push(`<button class="set-row" id="reloadBtn"><span class="txt"><b>새로고침</b></span><span class="go">${go}</span></button>`);
   $('#settingsRows').innerHTML = rows.join('');
-  $('#loginBtn')?.addEventListener('click', () => { $('#loginMsg').textContent = ''; $('#loginDialog').showModal(); $('#loginId').focus(); });
   $('#logoutBtn')?.addEventListener('click', async () => {
     await api('/api/logout', { method: 'POST' }).catch(() => {});
-    state.user = null; renderAll();
+    state.user = null; lock();
   });
   $('#meSelect')?.addEventListener('change', e => setMe(e.target.value));
   $('#reloadBtn')?.addEventListener('click', () => location.reload());
@@ -547,8 +543,7 @@ $('#loginForm').addEventListener('submit', async e => {
     state.user = await api('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userid: $('#loginId').value, password: $('#loginPw').value }) });
     $('#loginPw').value = '';
-    $('#loginDialog').close();
-    renderAll(); show('mine');
+    await start();
   } catch (err) { $('#loginMsg').textContent = err.message; }
   finally { btn.disabled = false; }
 });
@@ -700,14 +695,28 @@ $('#viewer').addEventListener('close', () => { viewerToken++; $('#viewerBody').i
 
 // ---------- 시작 ----------
 applyIcons();
-(async () => {
-  show(ls.get('teach.view') || 'mine');
+function lock() {
+  document.body.classList.add('locked');
+  $('#loginMsg').textContent = state.loginAvailable === false ? '로그인 설정이 아직 되지 않았습니다. 관리자에게 문의하세요.' : '';
+  setTimeout(() => $('#loginId')?.focus(), 50);
+}
+let started = false;
+async function start() {
+  document.body.classList.remove('locked');
+  show(started ? 'mine' : (ls.get('teach.view') || 'mine'));
+  started = true;
   try { await loadAll(); }
-  catch (err) { $('#mineBody').innerHTML = `<div class="card empty">서버에 연결할 수 없습니다: ${esc(err.message)}</div>`; return; }
+  catch (err) { if (!document.body.classList.contains('locked')) $('#mineBody').innerHTML = `<div class="card empty">서버에 연결할 수 없습니다: ${esc(err.message)}</div>`; return; }
   renderAll();
   renderEditor(state.months.at(-1) || todayISO().slice(0, 7));
   await Promise.all([loadAcks(), initPush()]);
   renderMine(); renderSettings();
   // 로그인 이름이 배정표와 맞으면 알림 구독의 이름도 최신으로
   if (state.push.on && state.me) { const sub = await swReg?.pushManager.getSubscription(); if (sub) saveSubscription(sub).catch(() => {}); }
+}
+(async () => {
+  // 자동 로그인: 세션 쿠키가 살아 있으면 바로 시작, 아니면 로그인 화면
+  const me = await api('/api/me').catch(() => ({ loggedIn: false }));
+  state.loginAvailable = me.loginAvailable !== false;
+  if (me.loggedIn) { state.user = me; await start(); } else lock();
 })();

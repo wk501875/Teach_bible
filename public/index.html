@@ -26,7 +26,27 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="공과강사" />
 </head>
-<body>
+<body class="locked">
+  <!-- 첫 화면: 깨사모 로그인 -->
+  <main class="gate" id="gate">
+    <div class="gate-inner">
+      <div class="gate-mark"><img src="/logo.svg" alt="" width="96" height="96" /></div>
+      <p class="gate-church">일산교회 교회학교</p>
+      <h1 class="gate-title">공과강사</h1>
+      <form id="loginForm" class="gate-card">
+        <label class="field">깨사모 아이디
+          <input id="loginId" autocomplete="username" autocapitalize="off" required />
+        </label>
+        <label class="field">비밀번호
+          <input id="loginPw" type="password" autocomplete="current-password" required />
+        </label>
+        <button class="btn dark block" id="loginSubmit">로그인</button>
+        <p class="msg center" id="loginMsg"></p>
+      </form>
+      <p class="gate-note">한 번 로그인하면 이 기기에서 계속 유지됩니다.<br>비밀번호는 저장하지 않습니다.</p>
+    </div>
+  </main>
+
   <header class="brand-bar">
     <img src="/logo.svg" alt="" class="brand-logo" width="36" height="36" />
     <span class="brand-name">공과강사<small id="brandChurch">일산교회</small></span>
@@ -138,26 +158,6 @@
         <button class="btn dark" id="resSave">저장</button>
       </div>
     </div>
-  </dialog>
-
-  <!-- 깨사모 로그인 -->
-  <dialog id="loginDialog" class="sheet">
-    <div class="sheet-handle"></div>
-    <div class="sheet-head">
-      <div class="sheet-title"><h2>깨사모 로그인</h2></div>
-      <form method="dialog"><button class="close-btn" aria-label="닫기" data-icon="close"></button></form>
-    </div>
-    <form id="loginForm" class="sheet-body">
-      <label class="field">깨사모 아이디
-        <input id="loginId" autocomplete="username" autocapitalize="off" required />
-      </label>
-      <label class="field">비밀번호
-        <input id="loginPw" type="password" autocomplete="current-password" required />
-      </label>
-      <p class="hint">이 기기에서 로그인이 유지됩니다. 비밀번호는 저장하지 않습니다.</p>
-      <button class="btn dark block" id="loginSubmit">로그인</button>
-      <p class="msg center" id="loginMsg"></p>
-    </form>
   </dialog>
 
   <!-- 자료 보기 -->

@@ -260,3 +260,17 @@ dialog.viewer { width: min(1000px, 100vw); height: 92vh; max-height: 92vh; }
 .set-row .toggle.on { background: var(--green); }
 .set-row .toggle.on::after { transform: translateX(18px); }
 .set-row .sub-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+/* 로그인 게이트 */
+.gate { display: none; }
+body.locked .gate { display: grid; place-items: center; min-height: 100vh; padding: calc(env(safe-area-inset-top) + 24px) 20px calc(env(safe-area-inset-bottom) + 24px); }
+body.locked .brand-bar, body.locked .page, body.locked .tabbar { display: none !important; }
+body.locked { padding-bottom: 0; }
+.gate-inner { width: min(380px, 100%); text-align: center; }
+.gate-mark { width: 128px; height: 128px; margin: 0 auto 22px; background: #fff; border-radius: 34px; display: grid; place-items: center; box-shadow: 0 1px 0 var(--line), 0 12px 32px rgba(21,23,43,.08); }
+.gate-mark img { width: 96px; height: 96px; }
+.gate-church { margin: 0; font-size: .95rem; font-weight: 600; color: var(--muted); }
+.gate-title { margin: 4px 0 28px; font-size: 2.6rem; font-weight: 800; letter-spacing: -.04em; line-height: 1.1; }
+.gate-card { background: var(--surface); border-radius: 22px; padding: 20px 18px 16px; box-shadow: var(--shadow); text-align: left; }
+.gate-card .btn { margin-top: 4px; }
+.gate-note { margin: 18px 0 0; font-size: .8rem; color: var(--muted); line-height: 1.6; }
