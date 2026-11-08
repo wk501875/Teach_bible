@@ -67,7 +67,8 @@ async function loadAll() {
   state.months = months; state.resources = resources; state.adminLocked = status.adminLocked;
   const list = await Promise.all(months.map(m => api(`/api/schedules/${m}`)));
   state.schedules = Object.fromEntries(list.map(s => [s.month, s]));
-  const years = [...new Set(months.map(m => m.slice(0, 4)))];
+  const now = new Date();
+  const years = [...new Set([...months.map(m => m.slice(0, 4)), String(now.getFullYear()), ...(now.getMonth() >= 9 ? [String(now.getFullYear() + 1)] : [])])];
   await Promise.all(years.map(async y => {
     try {
       const r = await api(`/api/curriculum?year=${y}`);
@@ -75,8 +76,12 @@ async function loadAll() {
       for (const [k, e] of Object.entries(r.errors || {})) state.curriculumErrors.push(`${y} ${k}: ${e}`);
     } catch (err) { state.curriculumErrors.push(`${y}: ${err.message}`); }
   }));
-  const idx = months.indexOf(todayISO().slice(0, 7));
-  state.monthIdx = idx >= 0 ? idx : Math.max(0, months.length - 1);
+  // 배정표 탭에서 넘겨볼 달: 배정표가 있는 달 + 이번 달 이후 전국 공과가 있는 달
+  const cur = todayISO().slice(0, 7);
+  const future = Object.values(state.curriculum).flatMap(y => Object.values(y || {}).flatMap(src => src.lessons.map(l => l.date.slice(0, 7)))).filter(m => m >= cur);
+  state.tableMonths = [...new Set([...months, ...future])].sort();
+  const idx = state.tableMonths.indexOf(cur);
+  state.monthIdx = idx >= 0 ? idx : Math.max(0, state.tableMonths.length - 1);
 }
 
 // 모든 배정: [{date, dept, title, teacher, tag}]
@@ -161,11 +166,11 @@ function tasksHtml(a, withManual = true) {
 }
 
 // 일정 카드
-function agendaHtml(a, { big = false, flag = '' } = {}) {
+function agendaHtml(a, { big = false, flag = '', plain = false } = {}) {
   const info = lessonInfo(a);
   const mine = state.me && a.teacher === state.me;
   const meta = info ? `${info.source} ${info.l.no}과` : '';
-  return `<button type="button" class="agenda ${big ? 'big' : ''} ${mine && !big ? 'mine' : ''}" style="--bar:${info ? DEPT_BAR[a.dept] : '#ffd84d'}" ${resAttrs(a)}>
+  return `<button type="button" class="agenda ${big ? 'big' : ''} ${mine && !big && !plain ? 'mine' : ''}" style="--bar:${info ? DEPT_BAR[a.dept] : '#ffd84d'}" ${resAttrs(a)}>
     ${flag ? `<span class="flag">${flag}</span>` : ''}
     <div class="when">${fmtDate(a.date)} · ${esc(deptLabel(a.dept))}</div>
     <div class="title">${esc(a.title)}</div>
@@ -237,8 +242,20 @@ function renderMine() {
     html += keys.map(k => w.cells[k] && agendaHtml({ date: w.date, dept: k, ...w.cells[k] }, { flag: w.cells[k].teacher === state.me ? '내 공과' : '' })).filter(Boolean).join('');
   }
 
-  if (upcoming.length > 1) html += `<p class="section-label">다가오는 공과</p>${upcoming.slice(1).map(a => agendaHtml(a, { flag: dday(a.date) })).join('')}`;
-  if (past.length) html += `<p class="section-label">지난 공과</p>${past.map(a => agendaHtml(a)).join('')}`;
+  if (upcoming.length > 1) html += `<p class="section-label">다가오는 공과</p>${upcoming.slice(1).map(a => agendaHtml(a, { flag: dday(a.date), plain: true })).join('')}`;
+  // 배정표 이후의 전국 공과 미리보기 (가장 최근에 맡은 부서 기준)
+  const lastDept = mine.at(-1)?.dept;
+  if (lastDept) {
+    const after = lastAssignedDate();
+    const src = SRC[lastDept];
+    const ahead = nationalLessons(src).filter(l => l.date > after).slice(0, 4);
+    if (ahead.length) {
+      const label = { kinder: '유치부', elementary: '초등부', youth: '중고등부' }[src];
+      html += `<p class="section-label">앞으로의 ${label} 공과 <span class="muted" style="font-weight:500">· 배정 전, 전국 일정 기준</span></p>`;
+      html += ahead.map(l => agendaHtml({ date: l.date, dept: lastDept, title: l.title, teacher: '' }).replace(esc(deptLabel(lastDept)), label)).join('');
+    }
+  }
+  if (past.length) html += `<p class="section-label">지난 공과</p>${past.map(a => agendaHtml(a, { plain: true })).join('')}`;
   body.innerHTML = html;
 }
 $('#mineBody').addEventListener('click', e => {
@@ -248,6 +265,14 @@ $('#mineBody').addEventListener('click', e => {
   if (day) { state.day = day.dataset.day; renderMine(); }
 });
 $('#avatarBtn').onclick = () => show('settings');
+
+// ---------- 전국 일정 (배정 전) ----------
+// 부서 키 → 전국 일정 출처
+const NAT_COLS = [['kinder', 'kinder', '유치부'], ['elementary', 'elLow', '초등부'], ['youth', 'youth', '중고등부']];
+function nationalLessons(srcKey) {
+  return Object.values(state.curriculum).flatMap(y => y?.[srcKey]?.lessons || []).sort((a, b) => a.date.localeCompare(b.date));
+}
+const lastAssignedDate = () => allWeeks().at(-1)?.date || '';
 
 // ---------- 배정표 ----------
 function renderDeptChips() {
@@ -261,11 +286,12 @@ $('#deptChips').addEventListener('click', e => {
 const DEPT_ORDER = ['kinder', 'elLow', 'elHigh', 'youth', 'middle', 'high'];
 function renderTable() {
   renderDeptChips();
-  const month = state.months[state.monthIdx];
+  const months = state.tableMonths || state.months;
+  const month = months[state.monthIdx];
   const s = state.schedules[month];
   $('#prevMonth').disabled = state.monthIdx <= 0;
-  $('#nextMonth').disabled = state.monthIdx >= state.months.length - 1;
-  if (!s) { $('#tableEyebrow').textContent = ''; $('#tableSub').textContent = ''; $('#tableBody').innerHTML = `<div class="card empty">배정표가 없습니다.</div>`; return; }
+  $('#nextMonth').disabled = state.monthIdx >= months.length - 1;
+  if (!s) return renderNational(month);
   const [y, m] = month.split('-').map(Number);
   $('#tableEyebrow').textContent = `${s.church || ''} 교회학교`;
   $('#tableSub').textContent = `${y}년 ${m}월`;
@@ -301,6 +327,27 @@ function renderTable() {
     return items ? `<p class="section-label">${fmtLong(w.date)}</p>${items}` : '';
   }).join('');
   $('#tableBody').innerHTML = html || `<div class="card empty">${state.dept === 'me' ? (state.me ? '이번 달에는 공과가 없습니다' : '이름을 선택하거나 로그인하세요') : '배정이 없습니다'}</div>`;
+}
+// 배정표가 아직 없는 달: 전국 연간공과 일정으로 보여줌
+function renderNational(month) {
+  if (!month) { $('#tableEyebrow').textContent = ''; $('#tableSub').textContent = ''; $('#tableBody').innerHTML = `<div class="card empty">배정표가 없습니다.</div>`; return; }
+  const [y, m] = month.split('-').map(Number);
+  $('#tableEyebrow').textContent = '배정 전 · 전국 일정 기준';
+  $('#tableSub').textContent = `${y}년 ${m}월`;
+  const byDate = {};
+  for (const [src, dept] of NAT_COLS) {
+    for (const l of nationalLessons(src)) if (l.date.startsWith(month)) (byDate[l.date] ??= {})[dept] = l;
+  }
+  const dates = Object.keys(byDate).sort();
+  if (!dates.length) { $('#tableBody').innerHTML = `<div class="card empty">아직 올라온 공과가 없습니다.</div>`; return; }
+  const filter = state.dept;
+  const show = dept => filter === 'all' || filter === 'me' || (filter === 'youth' ? dept === 'youth' : filter === 'kinder' ? dept === 'kinder' : dept === 'elLow');
+  const card = (date, dept, l) => agendaHtml({ date, dept, title: l.title, teacher: '' });
+  const html = dates.map(d => {
+    const items = NAT_COLS.filter(([, dept]) => byDate[d][dept] && show(dept)).map(([, dept, label]) => card(d, dept, byDate[d][dept]).replace(esc(deptLabel(dept)), label)).join('');
+    return items ? `<p class="section-label">${fmtLong(d)}</p>${items}` : '';
+  }).join('');
+  $('#tableBody').innerHTML = `<p class="hint" style="margin:0 2px 4px">일산교회 배정표가 아직 없어 전국 연간공과 일정을 보여줍니다. 집회·행사로 날짜가 달라질 수 있습니다.</p>${html}`;
 }
 $('#prevMonth').onclick = () => { state.monthIdx--; renderTable(); };
 $('#nextMonth').onclick = () => { state.monthIdx++; renderTable(); };
@@ -440,7 +487,8 @@ $('#saveSchedule').onclick = async () => {
     await api(`/api/schedules/${month}`, { method: 'PUT', headers, body: JSON.stringify(schedule) });
     state.schedules[month] = schedule;
     if (!state.months.includes(month)) { state.months.push(month); state.months.sort(); }
-    state.monthIdx = state.months.indexOf(month);
+    if (state.tableMonths && !state.tableMonths.includes(month)) { state.tableMonths.push(month); state.tableMonths.sort(); }
+    state.monthIdx = (state.tableMonths || state.months).indexOf(month);
     $('#editMsg').textContent = '저장했습니다';
     renderMine(); renderTable(); renderEditStats();
   } catch (err) { $('#editMsg').textContent = `저장 실패: ${err.message}`; }
