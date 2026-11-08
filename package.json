@@ -1,12 +1,14 @@
 {
   "name": "teach-bible",
-  "version": "0.1.0",
-  "description": "공과강사 - 유초등부/중고등부 공과 준비 웹 앱",
+  "version": "0.2.0",
+  "description": "공과강사 - 공과 배정표와 전국교회학교 연간공과 자료를 한 곳에서",
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node --env-file-if-exists=.env server.js",
-    "dev": "node --watch --env-file-if-exists=.env server.js"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
   },
-  "engines": { "node": ">=22" }
+  "devDependencies": {
+    "wrangler": "^4.158.0"
+  }
 }

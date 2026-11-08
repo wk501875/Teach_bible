@@ -8,9 +8,6 @@ export const SOURCES = {
   youth: { cId: 762, label: '중고등부 참빛' },
 };
 
-const CACHE_MS = 6 * 60 * 60 * 1000;
-const cache = new Map(); // key -> { at, data }
-
 const decode = s => s
   .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
   .replace(/&quot;/g, '"').replace(/&#0?39;/g, "'").replace(/&bull;/g, '•');
@@ -68,16 +65,19 @@ export function parseSchedule(html) {
   return lessons;
 }
 
-export async function getSchedule(key, year) {
+// KV가 있으면 6시간 캐시
+export async function getSchedule(key, year, kv) {
   const src = SOURCES[key];
   if (!src) throw new Error('알 수 없는 부서');
-  const cacheKey = `${key}:${year}`;
-  const hit = cache.get(cacheKey);
-  if (hit && Date.now() - hit.at < CACHE_MS) return hit.data;
+  const cacheKey = `curriculum:${key}:${year}`;
+  if (kv) {
+    const hit = await kv.get(cacheKey, 'json');
+    if (hit) return hit;
+  }
   const url = `${BASE}?cId=${src.cId}&year=${year}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(20_000), headers: { 'User-Agent': 'teach-bible/0.1' } });
   if (!res.ok) throw new Error(`연간공과 일정 요청 실패 (${res.status})`);
   const data = { key, label: src.label, year, source: url, lessons: parseSchedule(await res.text()) };
-  cache.set(cacheKey, { at: Date.now(), data });
+  if (kv && data.lessons.length) await kv.put(cacheKey, JSON.stringify(data), { expirationTtl: 6 * 60 * 60 });
   return data;
 }

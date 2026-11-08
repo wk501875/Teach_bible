@@ -1,32 +1,40 @@
 # 📖 공과강사
 
-매달 카톡방으로 받는 **공과 배정표**, 교회학교 홈페이지의 **연간공과일정(참빛·머릿돌 교재)**, **유튜브 공과 말씀**을
-한 화면에서 볼 수 있게 모아주는 웹 앱입니다.
+매달 카톡방으로 받는 **공과 배정표**, 전국교회학교 **연간공과 일정(머릿돌·참빛)**, **유튜브 공과 말씀**을
+한 화면에서 볼 수 있게 모아주는 웹 앱입니다. Cloudflare Workers에서 동작합니다.
 
 ## 화면
-- **내 공과**: 이름을 고르면 다가오는 배정이 날짜와 D-day 순으로 나오고, 공과마다 교재와 영상 링크가 붙습니다.
+- **내 공과**: 이름을 고르면 다가오는 배정이 D-day와 함께 나옵니다.
+  공과마다 몇 과인지, 공과 말씀 유튜브, 부서에 맞는 학년별 PDF, 한글파일, 음성이 자동으로 연결됩니다.
 - **배정표**: 월별 배정표를 보여주고 내 칸을 강조합니다. 휴대폰에서는 주별 카드로 보입니다.
 - **배정표 입력**: 매달 새 배정표를 입력합니다. 일요일은 자동으로 채워지고 "중고등 통합"도 선택할 수 있습니다.
-- **교재·영상 자동 연결**: [전국교회학교](https://www.jbch.org/ko/school/?cId=715) 연간공과 일정(유치부·초등부 머릿돌, 중고등부 참빛)을
-  서버가 읽어서 배정표의 공과 제목과 맞춰 줍니다. 몇 과인지, 공과 말씀 유튜브, 학년별 PDF, 한글파일, 음성을 바로 열 수 있습니다.
-  로그인은 필요 없고, 결과는 6시간 동안 캐시합니다.
+  집회나 특별 행사 주는 그 일정을 그대로 적으면 됩니다. 연간공과에 없는 제목이라 자료가 붙지 않습니다.
 - **추가 메모**: 공과마다 링크나 메모를 더 저장하면 모든 강사가 함께 봅니다.
 
-## 실행
-Node.js 22 이상이 필요합니다. 따로 설치할 패키지는 없습니다.
+연간공과 자료는 [전국교회학교](https://www.jbch.org/ko/school/?cId=715) 연간공과 일정 표를 Worker가 직접 읽어서
+배정표의 **공과 제목**과 맞춥니다. 행사로 건너뛰는 주가 있어도 어긋나지 않습니다. 로그인은 필요 없고, 결과는 6시간 동안 캐시합니다.
 
+## 구조
+| 파일 | 역할 |
+|---|---|
+| `public/` | 화면 (HTML/CSS/JS) |
+| `src/worker.js` | API: 배정표, 메모, 연간공과 (`/api/...`) |
+| `src/jbch-school.js` | 연간공과 일정 표 파서 |
+| `data/schedule-*.json` | 기본 배정표 (2026년 10월, 11월). KV에 저장된 배정표가 있으면 그것을 우선 사용 |
+| `wrangler.jsonc` | Cloudflare 설정 (KV 바인딩 `DATA`) |
+
+## Cloudflare 배포 (태블릿에서도 가능)
+1. Cloudflare 대시보드에서 **Workers & Pages → Create → Import a repository**를 선택합니다.
+2. GitHub의 `wk501875/Teach_bible` 저장소를 연결합니다. Build command는 비워 두고, Deploy command는 `npx wrangler deploy`입니다.
+3. 배포가 끝나면 `https://teach-bible.<계정>.workers.dev` 주소가 생깁니다. 이 주소를 카톡방에 공유하면 됩니다.
+4. (선택) **Settings → Variables and Secrets**에서 Secret `ADMIN_PASSWORD`를 추가하면, 배정표를 저장할 때 비밀번호를 묻습니다.
+
+배정표와 메모를 저장할 KV는 첫 배포 때 자동으로 만들어집니다. 만약 KV 관련 오류가 나면
+**Storage & Databases → KV**에서 namespace를 하나 만들고, 그 ID를 `wrangler.jsonc`의 `kv_namespaces`에 `"id": "..."`로 넣어 주세요.
+
+## 로컬 개발
 ```bash
-cp .env.example .env   # 필요하면 ADMIN_PASSWORD, JBCH 토큰 입력
-npm start              # http://localhost:3000
+npm install
+cp .dev.vars.example .dev.vars   # 필요하면 ADMIN_PASSWORD 입력
+npm run dev                      # http://localhost:8787
 ```
-
-## 데이터
-- `data/schedule-YYYY-MM.json`: 월별 배정표 (2026년 10월, 11월 입력됨)
-- `data/resources.json`: 공과 제목별 추가 링크와 메모
-- `jbch-school.js`: 연간공과 일정 표 파서 (`/api/curriculum?year=2026`)
-
-`ADMIN_PASSWORD`를 설정하면 배정표를 저장할 때 비밀번호를 묻습니다.
-
-## api.jbch.org (예정)
-`server.js`의 `/api/jbch` 프록시가 `dev_name`과 `tokenId`를 서버에서 붙여 `https://api.jbch.org`로 전달합니다.
-토큰은 브라우저에 노출되지 않습니다. 연간공과일정과 유튜브 링크를 API로 받을 수 있게 되면 자동으로 채우도록 연결할 예정입니다.

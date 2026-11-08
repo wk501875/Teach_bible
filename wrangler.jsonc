@@ -1,0 +1,10 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "teach-bible",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "assets": { "directory": "./public", "binding": "ASSETS" },
+  // 배정표/메모 저장소. 처음 배포할 때 Cloudflare가 자동으로 만들어 줍니다.
+  "kv_namespaces": [{ "binding": "DATA" }],
+  "observability": { "enabled": true }
+}

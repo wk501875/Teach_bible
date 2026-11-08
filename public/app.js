@@ -103,8 +103,10 @@ function sourceLabel(dept) { const k = SRC[dept]; return state.curriculum[Object
 function autoHtml(a) {
   const l = findLesson(a);
   if (!l) {
-    const why = state.curriculumErrors.length ? '연간공과 일정을 불러오지 못했습니다' : '연간공과 일정에서 같은 제목을 찾지 못했습니다';
-    return `<div class="res-row"><span class="k">📘 교재</span><span class="v">${why} · <a href="${SCHOOL_URL}" target="_blank" rel="noopener">직접 확인</a></span></div>`;
+    if (state.curriculumErrors.length) {
+      return `<div class="res-row"><span class="k">📘 교재</span><span class="v">연간공과 일정을 불러오지 못했습니다 · <a href="${SCHOOL_URL}" target="_blank" rel="noopener">직접 확인</a></span></div>`;
+    }
+    return ''; // 집회·특별 행사 주간은 공과가 없으므로 아무것도 표시하지 않음
   }
   const hide = HIDE[a.dept] || [];
   const mats = l.materials.filter(m => !hide.some(h => m.label.includes(h)))
