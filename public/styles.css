@@ -275,3 +275,5 @@ body.locked { padding-bottom: 0; }
 .gate-card .btn { margin-top: 4px; }
 .gate-note { margin: 18px 0 0; font-size: .8rem; color: var(--muted); line-height: 1.6; }
 .set-row .toggle:disabled { opacity: .5; cursor: progress; }
+.cal-btn { text-decoration: none; margin: -4px 0 4px; gap: 8px; }
+.cal-btn small { font-weight: 500; color: var(--muted); font-size: .76rem; }

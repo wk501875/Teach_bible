@@ -222,10 +222,11 @@ function renderMine() {
     const acked = state.acks.has(next.date);
     html += `<button class="check-row ${acked ? 'done' : ''}" data-ack="${next.date}">
       <span class="box">${acked ? svg('check') : ''}</span>
-      <span><b>${acked ? '공과 준비 확인 완료' : '공과 준비를 확인했어요'}</b><small>${acked ? '이번 주 알림이 더 오지 않습니다' : '체크하기 전까지 매일 오전 9시에 알림이 갑니다'}</small></span>
+      <span><b>${acked ? '공과 준비 확인 완료' : '공과 준비를 확인했어요'}</b><small>${acked ? (state.push.on ? '이번 주 알림이 더 오지 않습니다' : '준비 완료로 표시했습니다') : (state.push.on ? '체크하기 전까지 매일 오전 9시에 알림이 갑니다' : '준비가 끝나면 체크하세요')}</small></span>
     </button>`;
     html += `<div class="actions">${nextInfo?.sermon ? `<button class="btn dark block" ${matAttrs(nextInfo.sermon)}>공과 말씀 영상 보기</button>` : ''}
-      <button class="btn ${nextInfo?.sermon ? '' : 'block'}" ${resAttrs(next)}>메모</button></div>`;
+      <button class="btn ${nextInfo?.sermon ? '' : 'block'}" ${resAttrs(next)}>메모</button></div>
+      <a class="btn block cal-btn" href="${calUrl(next.date)}">캘린더에 추가 <small>월·토 오전 9시 알림</small></a>`;
     html += `<p class="section-label">자료</p><div class="card"><div class="tasks">${tasks || '<p class="empty">연결된 자료가 없습니다</p>'}</div></div>`;
   } else {
     html += `<div class="card empty">예정된 공과가 없습니다.</div>`;
@@ -513,7 +514,7 @@ function renderSettings() {
   const p = state.push;
   const inApp = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent);
   const pushSub = inApp ? '카카오톡 등 앱 안의 브라우저에서는 알림을 켤 수 없습니다. 크롬에서 열어 주세요'
-    : !p.supported ? (isIOS() ? '아이폰은 공유 → 홈 화면에 추가한 뒤 앱에서 켤 수 있습니다' : '이 브라우저는 알림을 지원하지 않습니다')
+    : !p.supported ? (isIOS() ? '아이폰은 공유 → 홈 화면에 추가한 뒤 켤 수 있습니다. 아래 캘린더 추가를 쓰셔도 됩니다' : '이 브라우저는 알림을 지원하지 않습니다. 아래 캘린더 추가를 이용하세요')
     : !state.me ? '이름을 먼저 선택하세요'
     : p.msg || (p.on ? '공과가 있는 주 월요일 오전 9시, 확인할 때까지 매일' : '공과가 있는 주에 알림을 받습니다');
   rows.push(`<div class="set-row"><span class="txt"><b>공과 알림</b><small ${p.error ? 'style="color:var(--red)"' : p.busy ? 'style="color:var(--blue)"' : ''}>${esc(pushSub)}</small>
@@ -524,6 +525,7 @@ function renderSettings() {
     rows.push(`<div class="set-row"><span class="txt"><b>내 이름</b>
       <select id="meSelect"><option value="">선택하세요</option>${names.map(n => `<option ${n === state.me ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select></span></div>`);
   }
+  if (state.me) rows.push(`<a class="set-row" href="${calUrl()}"><span class="txt"><b>내 공과 전체를 캘린더에 추가</b><small>어떤 브라우저든 됩니다. 공과 주 월요일·토요일 오전 9시에 캘린더가 알려줍니다${inApp ? ' (카카오톡 안에서는 안 될 수 있어요)' : ''}</small></span><span class="go">${go}</span></a>`);
   rows.push(`<a class="set-row" href="${SCHOOL_URL}" target="_blank" rel="noopener"><span class="txt"><b>전국교회학교 연간공과</b></span><span class="go">${svg('external')}</span></a>`);
   rows.push(`<button class="set-row" id="reloadBtn"><span class="txt"><b>새로고침</b></span><span class="go">${go}</span></button>`);
   $('#settingsRows').innerHTML = rows.join('');
@@ -547,6 +549,8 @@ $('#loginForm').addEventListener('submit', async e => {
   } catch (err) { $('#loginMsg').textContent = err.message; }
   finally { btn.disabled = false; }
 });
+
+const calUrl = date => `/api/calendar.ics?teacher=${encodeURIComponent(state.me)}${date ? `&date=${date}` : ''}`;
 
 // ---------- 공과 알림 · 준비 확인 ----------
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);

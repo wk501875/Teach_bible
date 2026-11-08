@@ -2,6 +2,7 @@
 import { getSchedule, SOURCES } from './jbch-school.js';
 import { handleAuth, getSession } from './auth.js';
 import { handlePush, runDailyReminders } from './push.js';
+import { handleCalendar } from './calendar.js';
 import seed202610 from '../data/schedule-2026-10.json';
 import seed202611 from '../data/schedule-2026-11.json';
 import seed202612 from '../data/schedule-2026-12.json';
@@ -104,6 +105,9 @@ async function handleApi(req, env, url) {
     });
     return json({ year, schedules, errors });
   }
+
+  // 내 공과 캘린더 파일
+  if (path === '/api/calendar.ics' && req.method === 'GET') return handleCalendar(req, env, url, loadSchedule, listMonths);
 
   // 공과 자료 파일 중계: GET /api/file?url=...&name=...&dl=1
   if (path === '/api/file' && req.method === 'GET') return proxyFile(req, url);
