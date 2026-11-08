@@ -18,7 +18,7 @@ const ls = {
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
 };
 
-const state = { months: [], schedules: {}, resources: {}, me: ls.get('teach.me') || '', monthIdx: 0, adminLocked: false };
+const state = { months: [], schedules: {}, resources: {}, curriculum: {}, curriculumErrors: [], me: ls.get('teach.me') || '', monthIdx: 0, adminLocked: false };
 
 const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
@@ -42,6 +42,14 @@ async function loadAll() {
   state.months = months; state.resources = resources; state.adminLocked = status.adminLocked;
   const list = await Promise.all(months.map(m => api(`/api/schedules/${m}`)));
   state.schedules = Object.fromEntries(list.map(s => [s.month, s]));
+  const years = [...new Set(months.map(m => m.slice(0, 4)))];
+  await Promise.all(years.map(async y => {
+    try {
+      const r = await api(`/api/curriculum?year=${y}`);
+      state.curriculum[y] = r.schedules;
+      for (const [k, e] of Object.entries(r.errors || {})) state.curriculumErrors.push(`${y} ${k}: ${e}`);
+    } catch (err) { state.curriculumErrors.push(`${y}: ${err.message}`); }
+  }));
   const cur = todayISO().slice(0, 7);
   const idx = months.indexOf(cur);
   state.monthIdx = idx >= 0 ? idx : Math.max(0, months.length - 1);
@@ -60,20 +68,63 @@ function allAssignments() {
   return out.sort((a, b) => a.date.localeCompare(b.date));
 }
 
-// ---------- 공과 자료 표시 ----------
-function resourceHtml(title) {
-  const r = state.resources[title] || {};
-  const yt = r.youtube
-    ? `<a href="${esc(r.youtube)}" target="_blank" rel="noopener">▶ 공과 말씀 영상 보기</a>`
-    : `<a href="https://www.youtube.com/results?search_query=${encodeURIComponent(title + ' 공과')}" target="_blank" rel="noopener">유튜브에서 찾기</a> <span class="chip">링크 미등록</span>`;
-  const book = r.textbook || r.textbookUrl
-    ? `${esc(r.textbook || '')} ${r.textbookUrl ? `<a href="${esc(r.textbookUrl)}" target="_blank" rel="noopener">열기</a>` : ''}`
-    : `<a href="${SCHOOL_URL}" target="_blank" rel="noopener">연간공과일정에서 확인</a> <span class="chip">미등록</span>`;
-  return `<div class="res">
-    <div class="res-row"><span class="k">📘 교재</span><span class="v">${book}</span></div>
-    <div class="res-row"><span class="k">▶️ 영상</span><span class="v">${yt}</span></div>
-    ${r.note ? `<div class="res-row"><span class="k">📝 메모</span><span class="v">${esc(r.note)}</span></div>` : ''}
-  </div>`;
+// ---------- 전국교회학교 연간공과와 매칭 ----------
+const SRC = { kinder: 'kinder', elLow: 'elementary', elHigh: 'elementary', middle: 'youth', high: 'youth', youth: 'youth' };
+// 부서와 상관없는 학년용 자료는 숨김
+const HIDE = { elLow: ['5,6학년'], elHigh: ['1,2학년'], middle: ['고등부'], high: ['중등부'] };
+const KIND_ORDER = { youtube: 0, pdf: 1, hwp: 2, audio: 3, file: 4 };
+const norm = t => String(t || '').replace(/[\s.,!?·'"()~\-]/g, '');
+function dice(a, b) {
+  if (a === b) return 1;
+  const grams = s => { const g = new Map(); for (let i = 0; i < s.length - 1; i++) { const k = s.slice(i, i + 2); g.set(k, (g.get(k) || 0) + 1); } return g; };
+  const ga = grams(a), gb = grams(b); let hit = 0;
+  for (const [k, n] of ga) hit += Math.min(n, gb.get(k) || 0);
+  const total = Math.max(1, a.length - 1 + b.length - 1);
+  return (2 * hit) / total;
+}
+const daysBetween = (a, b) => Math.abs(new Date(a) - new Date(b)) / 86400000;
+// 배정(부서·날짜·제목)에 맞는 전국 공과를 찾는다. 제목이 비슷한 것 중 날짜가 가장 가까운 것.
+function findLesson(a) {
+  const key = SRC[a.dept]; if (!key || !a.title) return null;
+  const y = Number(a.date.slice(0, 4));
+  const pool = [y, y - 1].flatMap(yy => state.curriculum[yy]?.[key]?.lessons || []);
+  const t = norm(a.title);
+  let best = null;
+  for (const l of pool) {
+    const score = dice(t, norm(l.title));
+    if (score < 0.6) continue;
+    const dist = daysBetween(l.date, a.date);
+    if (!best || score > best.score + 0.05 || (Math.abs(score - best.score) <= 0.05 && dist < best.dist)) best = { lesson: l, score, dist };
+  }
+  return best?.lesson || null;
+}
+function sourceLabel(dept) { const k = SRC[dept]; return state.curriculum[Object.keys(state.curriculum)[0]]?.[k]?.label || ''; }
+
+function autoHtml(a) {
+  const l = findLesson(a);
+  if (!l) {
+    const why = state.curriculumErrors.length ? '연간공과 일정을 불러오지 못했습니다' : '연간공과 일정에서 같은 제목을 찾지 못했습니다';
+    return `<div class="res-row"><span class="k">📘 교재</span><span class="v">${why} · <a href="${SCHOOL_URL}" target="_blank" rel="noopener">직접 확인</a></span></div>`;
+  }
+  const hide = HIDE[a.dept] || [];
+  const mats = l.materials.filter(m => !hide.some(h => m.label.includes(h)))
+    .sort((x, y) => (KIND_ORDER[x.kind] ?? 9) - (KIND_ORDER[y.kind] ?? 9));
+  const icon = { youtube: '▶', pdf: '📄', hwp: '📝', audio: '🎧', file: '⬇' };
+  const sermon = mats.find(m => m.kind === 'youtube');
+  return `
+    <div class="res-row"><span class="k">📘 교재</span><span class="v">${esc(sourceLabel(a.dept))} <b>${l.no ?? ''}과</b> 「${esc(l.title)}」 · ${esc(l.preacher)} <span class="chip">${esc(l.date.slice(5).replace('-', '/'))} 전국</span></span></div>
+    ${sermon ? `<div class="res-row"><span class="k">▶️ 영상</span><span class="v"><a href="${esc(sermon.url)}" target="_blank" rel="noopener">${esc(sermon.label.replace('설교 영상', '공과 말씀 영상'))} 보기</a></span></div>` : ''}
+    <div class="mats">${mats.filter(m => m !== sermon).map(m => `<a class="mat ${m.kind}" href="${esc(m.url)}" target="_blank" rel="noopener">${icon[m.kind] || ''} ${esc(m.label)}</a>`).join('')}</div>`;
+}
+
+function resourceHtml(a) {
+  const r = state.resources[a.title] || {};
+  const manual = [
+    r.textbook || r.textbookUrl ? `<div class="res-row"><span class="k">📌 추가</span><span class="v">${esc(r.textbook || '')} ${r.textbookUrl ? `<a href="${esc(r.textbookUrl)}" target="_blank" rel="noopener">열기</a>` : ''}</span></div>` : '',
+    r.youtube ? `<div class="res-row"><span class="k">📌 영상</span><span class="v"><a href="${esc(r.youtube)}" target="_blank" rel="noopener">등록한 영상 보기</a></span></div>` : '',
+    r.note ? `<div class="res-row"><span class="k">📝 메모</span><span class="v">${esc(r.note)}</span></div>` : '',
+  ].join('');
+  return `<div class="res">${autoHtml(a)}${manual}</div>`;
 }
 
 // ---------- 내 공과 ----------
@@ -96,8 +147,8 @@ function renderMine() {
         <span>${fmtDate(a.date)}</span> · <span>${esc(deptLabel(a.dept))}</span>
       </div>
       <h3>${esc(a.title)}</h3>
-      ${resourceHtml(a.title)}
-      <div class="foot"><button class="btn small" data-res="${esc(a.title)}">자료 링크 수정</button></div>
+      ${resourceHtml(a)}
+      <div class="foot"><button class="btn small" data-res="${esc(a.title)}" data-dept="${a.dept}" data-date="${a.date}">자세히 · 메모</button></div>
     </article>`;
   body.innerHTML = !mine.length ? `<div class="empty">${esc(state.me)} 님의 배정이 없습니다.</div>` :
     (upcoming.length ? `<h2 class="section-title">다가오는 공과</h2>${upcoming.map((a, i) => card(a, i === 0)).join('')}`
@@ -116,17 +167,18 @@ function renderTable() {
   const [y, m] = month.split('-').map(Number);
   $('#monthTitle').textContent = `${y}년 ${m}월 ${s.church || ''} 공과 배정표`;
 
-  const cellHtml = (c, attrs = '') => {
+  const cellHtml = (c, attrs = '', dept = '', date = '') => {
     if (!c) return `<td></td>`;
     const mine = state.me && c.teacher === state.me;
-    const linked = state.resources[c.title]?.youtube ? 'linked' : '';
-    return `<td class="cell ${mine ? 'mine' : ''}" data-res="${esc(c.title)}" ${attrs}>
+    const linked = findLesson({ ...c, dept, date }) ? 'linked' : '';
+    return `<td class="cell ${mine ? 'mine' : ''}" data-res="${esc(c.title)}" data-dept="${dept}" data-date="${date}" ${attrs}>
       <div class="t ${linked}">${esc(c.title)}</div><div class="p">${esc(c.teacher)}${esc(c.tag || '')}</div></td>`;
   };
   const rows = s.weeks.map(w => {
     const [, mm, dd] = w.date.split('-').map(Number);
-    const youth = w.cells.youth ? cellHtml(w.cells.youth, 'colspan="2"') : cellHtml(w.cells.middle) + cellHtml(w.cells.high);
-    return `<tr><th>${mm}/${dd}</th>${cellHtml(w.cells.kinder)}${cellHtml(w.cells.elLow)}${cellHtml(w.cells.elHigh)}${youth}</tr>`;
+    const C = (k, attrs = '') => cellHtml(w.cells[k], attrs, k, w.date);
+    const youth = w.cells.youth ? C('youth', 'colspan="2"') : C('middle') + C('high');
+    return `<tr><th>${mm}/${dd}</th>${C('kinder')}${C('elLow')}${C('elHigh')}${youth}</tr>`;
   }).join('');
   const table = `<table class="grid"><thead><tr><th>일자</th>${DEPTS.map(d => `<th>${d.label}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
 
@@ -135,7 +187,7 @@ function renderTable() {
     return `<div class="week-card"><h3>${fmtDate(w.date)}</h3>${keys.map(k => {
       const c = w.cells[k]; if (!c) return '';
       const mine = state.me && c.teacher === state.me;
-      return `<div class="item ${mine ? 'mine' : ''}" data-res="${esc(c.title)}"><span class="dept">${esc(deptLabel(k))}</span>
+      return `<div class="item ${mine ? 'mine' : ''}" data-res="${esc(c.title)}" data-dept="${k}" data-date="${w.date}"><span class="dept">${esc(deptLabel(k))}</span>
         <span><b>${esc(c.title)}</b><br><span class="p">${esc(c.teacher)}${esc(c.tag || '')}</span></span></div>`;
     }).join('')}</div>`;
   }).join('');
@@ -153,6 +205,8 @@ document.addEventListener('click', e => {
   resEditing = el.dataset.res;
   const r = state.resources[resEditing] || {};
   $('#resTitle').textContent = resEditing;
+  const a = { title: resEditing, dept: el.dataset.dept, date: el.dataset.date };
+  $('#resAuto').innerHTML = a.dept ? `<div class="res">${autoHtml(a)}</div>` : '';
   $('#resTextbook').value = r.textbook || '';
   $('#resTextbookUrl').value = r.textbookUrl || '';
   $('#resYoutube').value = r.youtube || '';

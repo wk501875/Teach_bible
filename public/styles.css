@@ -99,3 +99,10 @@ dialog::backdrop { background: rgba(0,0,0,.4); }
   .week-card .dept { flex: 0 0 6.5em; font-size: .8rem; color: var(--muted); }
   .month-bar h2 { min-width: 0; font-size: 1.05rem; }
 }
+
+.mats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.mat { font-size: .8rem; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--bg); color: var(--text); text-decoration: none; white-space: nowrap; }
+.mat.pdf { border-color: var(--primary); }
+.res-auto { margin: 8px 0 4px; padding: 10px; border-radius: 8px; background: var(--bg); }
+.res-auto:empty { display: none; }
+.res-auto .mat { background: var(--surface); }

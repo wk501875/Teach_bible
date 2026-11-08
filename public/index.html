@@ -65,14 +65,15 @@
       <h2 id="resTitle"></h2>
       <button class="icon-btn" aria-label="닫기">✕</button>
     </form>
-    <p class="hint">교회학교 홈페이지 연간공과일정에서 확인한 교재와 영상 링크를 저장하면 모든 강사가 함께 봅니다.</p>
-    <label class="field">교재 (예: 참빛 11월호 3과 / 머릿돌 24쪽)
+    <div id="resAuto" class="res-auto"></div>
+    <p class="hint">전국교회학교 연간공과 일정에서 자동으로 찾은 자료입니다. 추가로 저장할 링크나 메모가 있으면 아래에 적으세요 (모든 강사가 함께 봅니다).</p>
+    <label class="field">추가 자료 이름 (선택)
       <input id="resTextbook" />
     </label>
-    <label class="field">교재·공과일정 링크
+    <label class="field">추가 자료 링크
       <input id="resTextbookUrl" type="url" placeholder="https://" />
     </label>
-    <label class="field">유튜브 공과 말씀 링크
+    <label class="field">추가 영상 링크
       <input id="resYoutube" type="url" placeholder="https://youtu.be/..." />
     </label>
     <label class="field">메모 (본문 구절, 준비물 등)

@@ -3,6 +3,7 @@ import http from 'node:http';
 import { readFile, writeFile, readdir, rename } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getSchedule, SOURCES } from './jbch-school.js';
 
 const PORT = Number(process.env.PORT) || 3000;
 const BASE_URL = (process.env.JBCH_BASE_URL || 'https://api.jbch.org').replace(/\/+$/, '');
@@ -119,6 +120,18 @@ async function handleData(req, res, path) {
       await writeJson(file, body);
       return sendJson(res, 200, { ok: true });
     }
+  }
+  // 전국교회학교 연간공과 일정: GET /api/curriculum?year=2026
+  if (path === '/api/curriculum' && req.method === 'GET') {
+    const year = Number(new URL(req.url, 'http://x').searchParams.get('year')) || new Date().getFullYear();
+    if (year < 2000 || year > 2100) return sendJson(res, 400, { error: 'year 범위 오류' });
+    const results = await Promise.allSettled(Object.keys(SOURCES).map(k => getSchedule(k, year)));
+    const out = {}; const errors = {};
+    Object.keys(SOURCES).forEach((k, i) => {
+      if (results[i].status === 'fulfilled') out[k] = results[i].value;
+      else errors[k] = results[i].reason.message;
+    });
+    return sendJson(res, 200, { year, schedules: out, errors });
   }
   if (path === '/api/resources') {
     if (req.method === 'GET') return sendJson(res, 200, await readJson('resources.json', {}));
