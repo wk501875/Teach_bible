@@ -2,60 +2,62 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f1a2e" />
   <title>공과강사</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <h1>📖 공과강사</h1>
-    <nav class="nav" role="tablist">
-      <button class="nav-btn active" data-view="mine">내 공과</button>
-      <button class="nav-btn" data-view="table">배정표</button>
-      <button class="nav-btn" data-view="edit">배정표 입력</button>
-    </nav>
-    <div class="spacer"></div>
-    <div class="account" id="account">
-      <button class="btn small" id="loginBtn">깨사모 로그인</button>
+  <!-- 상단 히어로 -->
+  <header class="hero">
+    <div class="hero-inner">
+      <div class="hero-top">
+        <span class="brand"><span class="brand-mark" data-icon="book"></span>공과강사</span>
+        <div class="account" id="account"></div>
+      </div>
+      <div class="hero-title-row">
+        <button class="round-btn hidden" id="prevMonth" aria-label="이전 달" data-icon="chevronLeft"></button>
+        <h1 id="heroTitle">내 공과</h1>
+        <button class="round-btn hidden" id="nextMonth" aria-label="다음 달" data-icon="chevronRight"></button>
+      </div>
+      <p class="hero-sub"><span data-icon="calendar"></span><span id="heroSub"></span></p>
     </div>
   </header>
 
   <main class="main">
     <!-- 내 공과 -->
     <section data-section="mine">
-      <div class="who" id="whoBox">
-        <label for="meSelect">내 이름</label>
+      <div class="card who" id="whoBox">
+        <label for="meSelect"><span class="icon-circle" data-icon="user"></span>내 이름</label>
         <select id="meSelect"><option value="">선택하세요</option></select>
       </div>
-      <p class="hint" id="whoHint"></p>
       <div id="mineBody"></div>
     </section>
 
     <!-- 배정표 -->
     <section data-section="table" class="hidden">
-      <div class="month-bar">
-        <button class="btn" id="prevMonth" aria-label="이전 달">◀</button>
-        <h2 id="monthTitle"></h2>
-        <button class="btn" id="nextMonth" aria-label="다음 달">▶</button>
-      </div>
       <div id="tableBody"></div>
     </section>
 
     <!-- 배정표 입력 -->
     <section data-section="edit" class="hidden">
       <div class="card">
-        <div class="row">
-          <label class="field">월
-            <input type="month" id="editMonth" />
-          </label>
-          <label class="field grow">교회
-            <input id="editChurch" value="일산교회" />
-          </label>
+        <div class="card-head"><span>기본 정보</span></div>
+        <div class="card-body">
+          <div class="row">
+            <label class="field">월
+              <input type="month" id="editMonth" />
+            </label>
+            <label class="field grow">교회
+              <input id="editChurch" value="일산교회" />
+            </label>
+          </div>
+          <p class="hint">담당자는 배정표처럼 <b>이름+표시</b>로 적으세요 (예: <code>유석준B</code>). 집회나 행사 주는 그 일정을 그대로 적으면 됩니다.</p>
         </div>
-        <p class="hint">담당자는 배정표처럼 <b>이름+표시</b>로 적으세요 (예: <code>유석준B</code>). 공과 제목이 같은 칸은 자료 링크를 함께 씁니다.</p>
       </div>
       <div id="editBody"></div>
-      <div class="actions">
+      <div class="actions sticky-actions">
         <span class="msg" id="editMsg"></span>
         <div class="spacer"></div>
         <button class="btn" id="addWeek">＋ 주 추가</button>
@@ -64,63 +66,73 @@
     </section>
   </main>
 
-  <!-- 공과 자료 -->
-  <dialog id="resDialog">
-    <form method="dialog" class="dialog-head">
-      <h2 id="resTitle"></h2>
-      <button class="icon-btn" aria-label="닫기">✕</button>
-    </form>
-    <div id="resAuto" class="res-auto"></div>
-    <p class="hint">전국교회학교 연간공과 일정에서 자동으로 찾은 자료입니다. 추가로 저장할 링크나 메모가 있으면 아래에 적으세요 (모든 강사가 함께 봅니다).</p>
-    <label class="field">추가 자료 이름 (선택)
-      <input id="resTextbook" />
-    </label>
-    <label class="field">추가 자료 링크
-      <input id="resTextbookUrl" type="url" placeholder="https://" />
-    </label>
-    <label class="field">추가 영상 링크
-      <input id="resYoutube" type="url" placeholder="https://youtu.be/..." />
-    </label>
-    <label class="field">메모 (본문 구절, 준비물 등)
-      <textarea id="resNote" rows="3"></textarea>
-    </label>
-    <div class="actions">
-      <span class="msg" id="resMsg"></span>
-      <div class="spacer"></div>
-      <button class="btn primary" id="resSave">저장</button>
+  <!-- 하단 탭바 -->
+  <nav class="tabbar" role="tablist">
+    <button class="nav-btn active" data-view="mine"><span data-icon="home"></span>내 공과</button>
+    <button class="nav-btn" data-view="table"><span data-icon="list"></span>배정표</button>
+    <button class="nav-btn" data-view="edit"><span data-icon="edit"></span>배정표 입력</button>
+  </nav>
+
+  <!-- 공과 자료 · 메모 -->
+  <dialog id="resDialog" class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <span class="icon-circle accent" data-icon="book"></span>
+      <div class="sheet-title"><h2 id="resTitle"></h2><p id="resSub">공과 자료</p></div>
+      <form method="dialog"><button class="close-btn" aria-label="닫기" data-icon="close"></button></form>
+    </div>
+    <div class="sheet-body">
+      <div id="resAuto"></div>
+      <div class="card-head plain"><span>추가 자료 · 메모</span><span class="muted">모든 강사가 함께 봅니다</span></div>
+      <label class="field">추가 자료 이름
+        <input id="resTextbook" />
+      </label>
+      <label class="field">추가 자료 링크
+        <input id="resTextbookUrl" type="url" placeholder="https://" />
+      </label>
+      <label class="field">추가 영상 링크
+        <input id="resYoutube" type="url" placeholder="https://youtu.be/..." />
+      </label>
+      <label class="field">메모 (본문 구절, 준비물 등)
+        <textarea id="resNote" rows="3"></textarea>
+      </label>
+      <div class="actions">
+        <span class="msg" id="resMsg"></span>
+        <div class="spacer"></div>
+        <button class="btn primary" id="resSave">저장</button>
+      </div>
     </div>
   </dialog>
 
   <!-- 깨사모 로그인 -->
-  <dialog id="loginDialog">
-    <form class="dialog-head" method="dialog">
-      <h2>깨사모 로그인</h2>
-      <button class="icon-btn" aria-label="닫기">✕</button>
-    </form>
-    <form id="loginForm">
+  <dialog id="loginDialog" class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <span class="icon-circle accent" data-icon="user"></span>
+      <div class="sheet-title"><h2>깨사모 로그인</h2><p>로그인하면 내 공과를 자동으로 찾아요</p></div>
+      <form method="dialog"><button class="close-btn" aria-label="닫기" data-icon="close"></button></form>
+    </div>
+    <form id="loginForm" class="sheet-body">
       <label class="field">깨사모 아이디
         <input id="loginId" autocomplete="username" autocapitalize="off" required />
       </label>
       <label class="field">비밀번호
         <input id="loginPw" type="password" autocomplete="current-password" required />
       </label>
-      <p class="hint">로그인하면 배정표에서 내 공과를 자동으로 찾아 줍니다. 한 번 로그인하면 이 기기에서 계속 로그인 상태가 유지됩니다. 비밀번호는 저장하지 않습니다.</p>
-      <div class="actions">
-        <span class="msg" id="loginMsg"></span>
-        <div class="spacer"></div>
-        <button class="btn primary" id="loginSubmit">로그인</button>
-      </div>
+      <p class="hint">한 번 로그인하면 이 기기에서 계속 로그인 상태가 유지됩니다. 비밀번호는 저장하지 않습니다.</p>
+      <button class="btn dark block" id="loginSubmit">로그인</button>
+      <p class="msg center" id="loginMsg"></p>
     </form>
   </dialog>
 
   <!-- 자료 보기 (PDF / 영상 / 음성) -->
-  <dialog id="viewer" class="viewer">
-    <div class="dialog-head">
-      <h2 id="viewerTitle"></h2>
-      <div class="viewer-actions">
-        <button class="btn small" id="viewerDownload">⬇ 다운로드</button>
-        <form method="dialog"><button class="icon-btn" aria-label="닫기">✕</button></form>
-      </div>
+  <dialog id="viewer" class="sheet viewer">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <span class="icon-circle accent" id="viewerIcon" data-icon="file"></span>
+      <div class="sheet-title"><h2 id="viewerTitle"></h2><p id="viewerSub">공과 자료</p></div>
+      <button class="btn small" id="viewerDownload"><span data-icon="download"></span><span class="lbl">다운로드</span></button>
+      <form method="dialog"><button class="close-btn" aria-label="닫기" data-icon="close"></button></form>
     </div>
     <div class="viewer-body" id="viewerBody"></div>
   </dialog>
