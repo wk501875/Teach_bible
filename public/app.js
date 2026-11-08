@@ -564,6 +564,17 @@ async function initPush() {
 async function saveSubscription(sub) {
   await api('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), teacher: state.me }) });
 }
+// 알림 허용 대기: 허용 창 응답, 또는 사용자가 크롬 사이트 설정에서 직접 허용으로 바꾼 경우 둘 다 감지
+function waitPermission() {
+  return new Promise(resolve => {
+    let done = false;
+    const finish = v => { if (!done) { done = true; clearInterval(timer); resolve(v); } };
+    Notification.requestPermission().then(finish, () => {});
+    // 설정에서 바꾸고 돌아오면 이어서 진행
+    const timer = setInterval(() => { if (Notification.permission !== 'default') finish(Notification.permission); }, 1000);
+    navigator.permissions?.query({ name: 'notifications' }).then(st => { st.onchange = () => { if (st.state !== 'prompt') finish(st.state === 'granted' ? 'granted' : 'denied'); }; }).catch(() => {});
+  });
+}
 // 일정 시간 안에 끝나지 않으면 오류
 const withTimeout = (promise, ms, msg) => Promise.race([promise, new Promise((_, rej) => setTimeout(() => rej(new Error(msg)), ms))]);
 function pushStep(msg) { state.push.msg = msg; renderSettings(); }
@@ -580,8 +591,8 @@ async function togglePush() {
       if (Notification.permission === 'denied') throw new Error('알림이 차단되어 있습니다. 주소창 왼쪽 아이콘 → 권한 → 알림을 허용으로 바꾼 뒤 다시 눌러 주세요');
       if (Notification.permission !== 'granted') {
         // 크롬은 허용 창 대신 주소창에 작은 종 아이콘만 띄우기도 함
-        pushStep('알림 허용을 기다리는 중… 허용 창이 안 보이면 주소창의 종 모양 아이콘을 눌러 허용해 주세요');
-        const perm = await withTimeout(Notification.requestPermission(), 90000, '알림 허용 응답이 없습니다. 주소창의 종 모양 아이콘이나 사이트 설정에서 알림을 허용해 주세요');
+        pushStep('알림 허용을 기다리는 중… 허용 창이 안 뜨면 크롬 ⋮ → 설정 → 사이트 설정 → 알림에서 이 사이트를 허용으로 바꾼 뒤 돌아오세요');
+        const perm = await withTimeout(waitPermission(), 180000, '알림 허용 응답이 없습니다. 크롬 설정 → 사이트 설정 → 알림에서 이 사이트를 허용해 주세요');
         if (perm !== 'granted') throw new Error('알림을 허용해야 받을 수 있습니다. 주소창 왼쪽 아이콘 → 권한 → 알림을 허용해 주세요');
       }
       pushStep('알림 등록 중…');
