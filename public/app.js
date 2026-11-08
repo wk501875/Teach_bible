@@ -513,10 +513,12 @@ function renderSettings() {
   const rows = [];
   const go = svg('chevronRight');
   const p = state.push;
-  const pushSub = !p.supported ? (isIOS() ? '아이폰은 공유 → 홈 화면에 추가한 뒤 앱에서 켤 수 있습니다' : '이 브라우저는 알림을 지원하지 않습니다')
+  const inApp = /KAKAOTALK|NAVER|Instagram|FBAN|FBAV|Line\//i.test(navigator.userAgent);
+  const pushSub = inApp ? '카카오톡 등 앱 안의 브라우저에서는 알림을 켤 수 없습니다. 크롬에서 열어 주세요'
+    : !p.supported ? (isIOS() ? '아이폰은 공유 → 홈 화면에 추가한 뒤 앱에서 켤 수 있습니다' : '이 브라우저는 알림을 지원하지 않습니다')
     : !state.me ? '이름을 먼저 선택하세요'
     : p.msg || (p.on ? '공과가 있는 주 월요일 오전 9시, 확인할 때까지 매일' : '공과가 있는 주에 알림을 받습니다');
-  rows.push(`<div class="set-row"><span class="txt"><b>공과 알림</b><small>${esc(pushSub)}</small>
+  rows.push(`<div class="set-row"><span class="txt"><b>공과 알림</b><small ${p.msg && !p.on ? 'style="color:var(--red)"' : ''}>${esc(pushSub)}</small>
     ${p.on ? '<span class="sub-actions"><button class="btn small" id="pushTest">테스트 알림 보내기</button></span>' : ''}</span>
     ${p.supported && state.me ? `<button class="toggle ${p.on ? 'on' : ''}" id="pushToggle" aria-label="공과 알림" ${p.busy ? 'disabled' : ''}></button>` : ''}</div>`);
   if (u) rows.push(`<button class="set-row" id="logoutBtn"><span class="txt"><b>로그아웃</b></span><span class="go">${go}</span></button>`);
@@ -576,14 +578,22 @@ async function togglePush() {
       if (sub) { await api('/api/push/unsubscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => {}); await sub.unsubscribe(); }
       p.on = false;
     } else {
+      if (Notification.permission === 'denied') throw new Error('알림이 차단되어 있습니다. 주소창 왼쪽 자물쇠 → 권한 → 알림을 허용으로 바꿔 주세요');
       const perm = await Notification.requestPermission();
-      if (perm !== 'granted') throw new Error('알림 권한이 거부되었습니다. 브라우저 설정에서 허용해 주세요');
+      if (perm !== 'granted') throw new Error('알림 권한을 허용해야 합니다');
+      swReg = swReg || await navigator.serviceWorker.register('/sw.js');
+      const reg = await navigator.serviceWorker.ready; // 서비스 워커가 활성화될 때까지 대기
+      swReg = reg;
       const { publicKey } = await api('/api/push/key');
-      const sub = (await swReg.pushManager.getSubscription()) || await swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(publicKey) });
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        try { sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(publicKey) }); }
+        catch (e) { throw new Error(`알림 등록 실패: ${e.name || ''} ${e.message || e}`.trim()); }
+      }
       await saveSubscription(sub);
       p.on = true;
     }
-  } catch (err) { p.msg = err.message; }
+  } catch (err) { p.msg = err.message || String(err); console.error('push', err); }
   p.busy = false; renderSettings();
 }
 async function testPush() {
