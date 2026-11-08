@@ -1,5 +1,6 @@
 // 공과강사 Cloudflare Worker: 정적 화면(ASSETS) + 배정표/메모 저장(KV) + 전국교회학교 연간공과 일정
 import { getSchedule, SOURCES } from './jbch-school.js';
+import { handleAuth } from './auth.js';
 import seed202610 from '../data/schedule-2026-10.json';
 import seed202611 from '../data/schedule-2026-11.json';
 
@@ -36,6 +37,9 @@ async function listMonths(env) {
 
 async function handleApi(req, env, url) {
   const path = url.pathname;
+
+  const auth = await handleAuth(req, env, path);
+  if (auth) return auth;
 
   if (path === '/api/status' && req.method === 'GET') {
     return json({ adminLocked: Boolean(env.ADMIN_PASSWORD) });

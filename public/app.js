@@ -18,7 +18,7 @@ const ls = {
   set(k, v) { try { localStorage.setItem(k, v); } catch {} },
 };
 
-const state = { months: [], schedules: {}, resources: {}, curriculum: {}, curriculumErrors: [], me: ls.get('teach.me') || '', monthIdx: 0, adminLocked: false };
+const state = { user: null, months: [], schedules: {}, resources: {}, curriculum: {}, curriculumErrors: [], me: ls.get('teach.me') || '', monthIdx: 0, adminLocked: false };
 
 const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
@@ -38,7 +38,8 @@ async function api(path, opts = {}) {
 }
 
 async function loadAll() {
-  const [months, resources, status] = await Promise.all([api('/api/schedules'), api('/api/resources'), api('/api/status')]);
+  const [months, resources, status, me] = await Promise.all([api('/api/schedules'), api('/api/resources'), api('/api/status'), api('/api/me').catch(() => ({ loggedIn: false }))]);
+  state.user = me.loggedIn ? me : null; state.loginAvailable = me.loginAvailable !== false;
   state.months = months; state.resources = resources; state.adminLocked = status.adminLocked;
   const list = await Promise.all(months.map(m => api(`/api/schedules/${m}`)));
   state.schedules = Object.fromEntries(list.map(s => [s.month, s]));
@@ -138,6 +139,12 @@ function resourceHtml(a) {
 function renderMine() {
   const all = allAssignments();
   const names = [...new Set(all.map(a => a.teacher).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
+  const loginName = state.user?.name?.replace(/\s/g, '');
+  const matched = loginName && names.find(n => n.replace(/\s/g, '') === loginName);
+  if (matched) state.me = matched;
+  $('#whoBox').classList.toggle('hidden', Boolean(matched));
+  $('#whoHint').textContent = matched ? `${matched} 님의 공과입니다.`
+    : state.user ? `배정표에서 '${state.user.name}' 님 이름을 찾지 못했습니다. 이름을 직접 선택하세요.` : '';
   $('#meSelect').innerHTML = `<option value="">선택하세요</option>` +
     names.map(n => `<option ${n === state.me ? 'selected' : ''}>${esc(n)}</option>`).join('');
   const body = $('#mineBody');
@@ -333,6 +340,33 @@ $('#saveSchedule').onclick = async () => {
   } catch (err) { $('#editMsg').textContent = `저장 실패: ${err.message}`; }
 };
 
+// ---------- 깨사모 로그인 ----------
+function renderAccount() {
+  const box = $('#account');
+  if (state.user) {
+    box.innerHTML = `<span class="me-name">👤 ${esc(state.user.name)}</span><button class="btn small" id="logoutBtn">로그아웃</button>`;
+    $('#logoutBtn').onclick = async () => {
+      await api('/api/logout', { method: 'POST' }).catch(() => {});
+      state.user = null; renderAccount(); renderMine(); renderTable();
+    };
+  } else {
+    box.innerHTML = state.loginAvailable ? `<button class="btn small" id="loginBtn">깨사모 로그인</button>` : '';
+    $('#loginBtn')?.addEventListener('click', () => { $('#loginMsg').textContent = ''; $('#loginDialog').showModal(); $('#loginId').focus(); });
+  }
+}
+$('#loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = $('#loginSubmit'); btn.disabled = true; $('#loginMsg').textContent = '로그인 중…';
+  try {
+    state.user = await api('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userid: $('#loginId').value, password: $('#loginPw').value }) });
+    $('#loginPw').value = '';
+    $('#loginDialog').close();
+    renderAccount(); renderMine(); renderTable(); show('mine');
+  } catch (err) { $('#loginMsg').textContent = err.message; }
+  finally { btn.disabled = false; }
+});
+
 // ---------- 화면 전환 ----------
 function show(view) {
   $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
@@ -344,7 +378,7 @@ $$('.nav-btn').forEach(b => (b.onclick = () => show(b.dataset.view)));
 (async () => {
   try { await loadAll(); }
   catch (err) { $('#mineBody').innerHTML = `<div class="empty">서버에 연결할 수 없습니다: ${esc(err.message)}</div>`; return; }
-  renderMine(); renderTable();
+  renderAccount(); renderMine(); renderTable();
   renderEditor(state.months.at(-1) || todayISO().slice(0, 7));
   show(ls.get('teach.view') || 'mine');
 })();
