@@ -518,7 +518,8 @@ function renderSettings() {
     : !state.me ? '이름을 먼저 선택하세요'
     : p.msg || (p.on ? '공과가 있는 주 월요일 오전 9시, 확인할 때까지 매일' : '공과가 있는 주에 알림을 받습니다');
   rows.push(`<div class="set-row"><span class="txt"><b>공과 알림</b><small ${p.error ? 'style="color:var(--red)"' : p.busy ? 'style="color:var(--blue)"' : ''}>${esc(pushSub)}</small>
-    ${p.on ? '<span class="sub-actions"><button class="btn small" id="pushTest">테스트 알림 보내기</button></span>' : ''}</span>
+    ${p.on ? '<span class="sub-actions"><button class="btn small" id="pushTest">테스트 알림 보내기</button></span>' : ''}
+    ${!p.on && (p.busy || p.error) && p.diag ? `<small style="display:block;margin-top:6px;font-size:.7rem;color:var(--muted)">${esc(p.diag)}</small>` : ''}</span>
     ${p.supported && state.me ? `<button class="toggle ${p.on ? 'on' : ''}" id="pushToggle" aria-label="공과 알림" ${p.busy ? 'disabled' : ''}></button>` : ''}</div>`);
   if (u) rows.push(`<button class="set-row" id="logoutBtn"><span class="txt"><b>로그아웃</b></span><span class="go">${go}</span></button>`);
   if (!u || !names.some(n => n.replace(/\s/g, '') === u.name.replace(/\s/g, ''))) {
@@ -568,6 +569,18 @@ async function initPush() {
 async function saveSubscription(sub) {
   await api('/api/push/subscribe', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ subscription: sub.toJSON(), teacher: state.me }) });
 }
+// 알림 진단 (설정 화면에 표시해 원인 파악)
+async function pushDiag() {
+  const ua = navigator.userAgent;
+  const browser = (ua.match(/SamsungBrowser\/[\d.]+/) || ua.match(/KAKAOTALK[\/ ][\d.]+/i) || ua.match(/NAVER\([^)]*\)/) || ua.match(/Whale\/[\d.]+/) || ua.match(/Edg\/[\d.]+/) || ua.match(/CriOS\/[\d.]+/) || ua.match(/Chrome\/[\d.]+/) || ua.match(/Version\/[\d.]+.*Safari/) || ['알 수 없음'])[0];
+  let perm = 'Notification' in window ? Notification.permission : '없음';
+  try { const st = await navigator.permissions?.query({ name: 'notifications' }); if (st) perm += ` / ${st.state}`; } catch {}
+  let sw = '없음';
+  try { const r = await navigator.serviceWorker?.getRegistration(); sw = r ? (r.active ? '활성' : r.installing ? '설치 중' : r.waiting ? '대기' : '등록됨') : '미등록'; } catch {}
+  const standalone = matchMedia('(display-mode: standalone)').matches ? '홈 화면 앱' : '브라우저';
+  state.push.diag = `진단: ${browser} · ${standalone} · 권한 ${perm} · 서비스워커 ${sw} · 푸시 ${'PushManager' in window ? '지원' : '미지원'}`;
+}
+
 // 알림 허용 대기: 허용 창 응답, 또는 사용자가 크롬 사이트 설정에서 직접 허용으로 바꾼 경우 둘 다 감지
 function waitPermission() {
   return new Promise(resolve => {
@@ -585,6 +598,7 @@ function pushStep(msg) { state.push.msg = msg; renderSettings(); }
 async function togglePush() {
   const p = state.push; if (p.busy) return;
   p.busy = true; p.error = false;
+  await pushDiag();
   try {
     if (p.on) {
       pushStep('알림을 끄는 중…');
@@ -614,6 +628,7 @@ async function togglePush() {
       p.on = true; p.msg = '';
     }
   } catch (err) { p.msg = err.message || String(err); p.error = true; console.error('push', err); }
+  await pushDiag();
   p.busy = false; renderSettings();
 }
 async function testPush() {
