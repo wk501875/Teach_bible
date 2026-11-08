@@ -9,12 +9,16 @@ const RECHECK_MS = 24 * 60 * 60 * 1000; // 하루에 한 번 hash 가 아직 유
 async function callJbch(env, path, params) {
   const res = await fetch(`${API}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    // User-Agent 가 없으면 생명선 API 서버가 요청을 막음 (417 / 연결 끊김)
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': 'Mozilla/5.0 (compatible; teach-bible/0.3)' },
     body: JSON.stringify({ dev_name: env.JBCH_DEV_NAME, tokenId: env.JBCH_TOKEN_ID, ...params }),
     signal: AbortSignal.timeout(15_000),
   });
   const text = await res.text();
-  try { return JSON.parse(text); } catch { return { status: 'error', result: text.slice(0, 200) }; }
+  try { return JSON.parse(text); } catch {
+    const title = (text.match(/<title>([^<]*)<\/title>/i) || [])[1];
+    return { status: 'error', result: `생명선 API 응답 오류 (${res.status}${title ? ' ' + title : ''})` };
+  }
 }
 
 // 응답 어디에 있든 첫 번째로 맞는 키의 문자열 값을 찾는다 (응답 모양이 문서에 자세히 없어서 넓게 찾음)
