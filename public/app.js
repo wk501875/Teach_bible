@@ -1,251 +1,287 @@
-// 공과강사 프론트엔드: 공과는 브라우저(localStorage)에 저장
-const STORE_KEY = 'teach_bible.lessons.v1';
+// 공과강사: 배정표 → 내 공과 → 교재·영상 링크를 한 곳에서
+const SCHOOL_URL = 'https://www.jbch.org/ko/school/?cId=715'; // 교회학교 연간공과일정
+const DEPTS = [
+  { key: 'kinder', label: '유치부' },
+  { key: 'elLow', label: '초등 1~3학년' },
+  { key: 'elHigh', label: '초등 4~6학년' },
+  { key: 'middle', label: '중등부' },
+  { key: 'high', label: '고등부' },
+];
+const YOUTH = { key: 'youth', label: '중고등부 (통합)' };
+const deptLabel = k => (k === 'youth' ? YOUTH.label : DEPTS.find(d => d.key === k)?.label || k);
+
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-
-const state = { lessons: loadLessons(), currentId: null, tab: 'kids' };
-
-function loadLessons() {
-  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; }
-}
-function persist() {
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(state.lessons));
-    $('#savedMsg').textContent = `저장됨 ${new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}`;
-  } catch {
-    $('#savedMsg').textContent = '⚠️ 저장 실패 (브라우저 저장소를 확인하세요)';
-  }
-}
-function newLesson() {
-  return {
-    id: crypto.randomUUID?.() || String(Date.now()),
-    title: '', date: new Date().toISOString().slice(0, 10), passage: '', scripture: '', keyMessage: '',
-    kids: { intro: '', explain: '', activity: '', quiz: [], memory: '' },
-    teens: { intro: '', explain: '', discussion: [], apply: '' },
-    updatedAt: Date.now(),
-  };
-}
-const current = () => state.lessons.find(l => l.id === state.currentId);
-const getPath = (obj, path) => path.split('.').reduce((o, k) => o?.[k], obj);
-function setPath(obj, path, value) {
-  const keys = path.split('.'); const last = keys.pop();
-  keys.reduce((o, k) => (o[k] ??= {}), obj)[last] = value;
-}
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const ls = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
 
-// ---------- 목록 ----------
-function renderList() {
-  const q = $('#search').value.trim().toLowerCase();
-  const items = [...state.lessons]
-    .sort((a, b) => (b.date || '').localeCompare(a.date || '') || b.updatedAt - a.updatedAt)
-    .filter(l => !q || `${l.title} ${l.passage}`.toLowerCase().includes(q));
-  $('#lessonList').innerHTML = items.map(l => `
-    <li data-id="${esc(l.id)}" class="${l.id === state.currentId ? 'active' : ''}">
-      <div class="t">${esc(l.title || '(제목 없음)')}</div>
-      <div class="s">${esc(l.date)} · ${esc(l.passage || '본문 미정')}</div>
-    </li>`).join('') || '<li class="s">공과가 없습니다</li>';
+const state = { months: [], schedules: {}, resources: {}, me: ls.get('teach.me') || '', monthIdx: 0, adminLocked: false };
+
+const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
+const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
+function fmtDate(iso) { const [y, m, d] = iso.split('-').map(Number); const dt = new Date(y, m - 1, d); return `${m}/${d} (${WEEKDAY[dt.getDay()]})`; }
+function dday(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const [ty, tm, td] = todayISO().split('-').map(Number);
+  const diff = Math.round((new Date(y, m - 1, d) - new Date(ty, tm - 1, td)) / 86400000);
+  return diff === 0 ? '오늘' : diff > 0 ? `D-${diff}` : `${-diff}일 전`;
 }
 
-// ---------- 편집기 ----------
-function openLesson(id) {
-  state.currentId = id;
-  const l = current();
-  $('#emptyState').classList.toggle('hidden', !!l);
-  $('#editor').classList.toggle('hidden', !l);
-  $('#sidebar').classList.remove('open');
-  if (!l) return renderList();
-  $$('[data-f]').forEach(el => { el.value = getPath(l, el.dataset.f) ?? ''; });
-  $$('[data-list]').forEach(renderListField);
-  $('#savedMsg').textContent = '';
-  renderList();
+async function api(path, opts = {}) {
+  const r = await fetch(path, opts);
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+  return data;
 }
 
-function renderListField(container) {
-  const l = current(); const path = container.dataset.list; const kind = container.dataset.kind;
-  const arr = getPath(l, path) || [];
-  container.innerHTML = arr.map((item, i) => `
-    <div class="list-item" data-i="${i}">
-      <span class="num">${i + 1}.</span>
-      <div class="inputs">
-        ${kind === 'qa'
-          ? `<input data-k="q" placeholder="질문" value="${esc(item.q)}" />
-             <input data-k="a" placeholder="정답" value="${esc(item.a)}" />`
-          : `<input data-k="text" placeholder="질문" value="${esc(item)}" />`}
+async function loadAll() {
+  const [months, resources, status] = await Promise.all([api('/api/schedules'), api('/api/resources'), api('/api/status')]);
+  state.months = months; state.resources = resources; state.adminLocked = status.adminLocked;
+  const list = await Promise.all(months.map(m => api(`/api/schedules/${m}`)));
+  state.schedules = Object.fromEntries(list.map(s => [s.month, s]));
+  const cur = todayISO().slice(0, 7);
+  const idx = months.indexOf(cur);
+  state.monthIdx = idx >= 0 ? idx : Math.max(0, months.length - 1);
+}
+
+// 모든 배정을 평평하게: [{date, dept, title, teacher, tag}]
+function allAssignments() {
+  const out = [];
+  for (const s of Object.values(state.schedules)) {
+    for (const w of s.weeks) {
+      for (const [dept, c] of Object.entries(w.cells)) {
+        if (c && (c.title || c.teacher)) out.push({ date: w.date, dept, ...c });
+      }
+    }
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ---------- 공과 자료 표시 ----------
+function resourceHtml(title) {
+  const r = state.resources[title] || {};
+  const yt = r.youtube
+    ? `<a href="${esc(r.youtube)}" target="_blank" rel="noopener">▶ 공과 말씀 영상 보기</a>`
+    : `<a href="https://www.youtube.com/results?search_query=${encodeURIComponent(title + ' 공과')}" target="_blank" rel="noopener">유튜브에서 찾기</a> <span class="chip">링크 미등록</span>`;
+  const book = r.textbook || r.textbookUrl
+    ? `${esc(r.textbook || '')} ${r.textbookUrl ? `<a href="${esc(r.textbookUrl)}" target="_blank" rel="noopener">열기</a>` : ''}`
+    : `<a href="${SCHOOL_URL}" target="_blank" rel="noopener">연간공과일정에서 확인</a> <span class="chip">미등록</span>`;
+  return `<div class="res">
+    <div class="res-row"><span class="k">📘 교재</span><span class="v">${book}</span></div>
+    <div class="res-row"><span class="k">▶️ 영상</span><span class="v">${yt}</span></div>
+    ${r.note ? `<div class="res-row"><span class="k">📝 메모</span><span class="v">${esc(r.note)}</span></div>` : ''}
+  </div>`;
+}
+
+// ---------- 내 공과 ----------
+function renderMine() {
+  const all = allAssignments();
+  const names = [...new Set(all.map(a => a.teacher).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'ko'));
+  $('#meSelect').innerHTML = `<option value="">선택하세요</option>` +
+    names.map(n => `<option ${n === state.me ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  const body = $('#mineBody');
+  if (!state.me) { body.innerHTML = `<div class="empty">이름을 선택하면 내 공과 배정이 나타납니다.</div>`; return; }
+
+  const mine = all.filter(a => a.teacher === state.me);
+  const today = todayISO();
+  const upcoming = mine.filter(a => a.date >= today);
+  const past = mine.filter(a => a.date < today).reverse();
+  const card = (a, next) => `
+    <article class="lesson ${next ? 'next' : ''}">
+      <div class="meta">
+        <span class="chip ${next ? 'dday' : ''}">${dday(a.date)}</span>
+        <span>${fmtDate(a.date)}</span> · <span>${esc(deptLabel(a.dept))}</span>
       </div>
-      <button class="icon-btn" data-remove aria-label="삭제">✕</button>
-    </div>`).join('');
+      <h3>${esc(a.title)}</h3>
+      ${resourceHtml(a.title)}
+      <div class="foot"><button class="btn small" data-res="${esc(a.title)}">자료 링크 수정</button></div>
+    </article>`;
+  body.innerHTML = !mine.length ? `<div class="empty">${esc(state.me)} 님의 배정이 없습니다.</div>` :
+    (upcoming.length ? `<h2 class="section-title">다가오는 공과</h2>${upcoming.map((a, i) => card(a, i === 0)).join('')}`
+                     : `<div class="empty">다가오는 배정이 없습니다. 새 배정표가 올라오면 '배정표 입력'에서 넣어 주세요.</div>`) +
+    (past.length ? `<h2 class="section-title">지난 공과</h2>${past.map(a => card(a, false)).join('')}` : '');
 }
+$('#meSelect').onchange = e => { state.me = e.target.value; ls.set('teach.me', state.me); renderMine(); };
 
-let saveTimer;
-function scheduleSave() {
-  const l = current(); if (!l) return;
-  l.updatedAt = Date.now();
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => { persist(); renderList(); }, 400);
+// ---------- 배정표 ----------
+function renderTable() {
+  const month = state.months[state.monthIdx];
+  const s = state.schedules[month];
+  $('#prevMonth').disabled = state.monthIdx <= 0;
+  $('#nextMonth').disabled = state.monthIdx >= state.months.length - 1;
+  if (!s) { $('#monthTitle').textContent = '배정표 없음'; $('#tableBody').innerHTML = `<div class="empty">'배정표 입력'에서 이번 달 배정표를 넣어 주세요.</div>`; return; }
+  const [y, m] = month.split('-').map(Number);
+  $('#monthTitle').textContent = `${y}년 ${m}월 ${s.church || ''} 공과 배정표`;
+
+  const cellHtml = (c, attrs = '') => {
+    if (!c) return `<td></td>`;
+    const mine = state.me && c.teacher === state.me;
+    const linked = state.resources[c.title]?.youtube ? 'linked' : '';
+    return `<td class="cell ${mine ? 'mine' : ''}" data-res="${esc(c.title)}" ${attrs}>
+      <div class="t ${linked}">${esc(c.title)}</div><div class="p">${esc(c.teacher)}${esc(c.tag || '')}</div></td>`;
+  };
+  const rows = s.weeks.map(w => {
+    const [, mm, dd] = w.date.split('-').map(Number);
+    const youth = w.cells.youth ? cellHtml(w.cells.youth, 'colspan="2"') : cellHtml(w.cells.middle) + cellHtml(w.cells.high);
+    return `<tr><th>${mm}/${dd}</th>${cellHtml(w.cells.kinder)}${cellHtml(w.cells.elLow)}${cellHtml(w.cells.elHigh)}${youth}</tr>`;
+  }).join('');
+  const table = `<table class="grid"><thead><tr><th>일자</th>${DEPTS.map(d => `<th>${d.label}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+
+  const cards = s.weeks.map(w => {
+    const keys = w.cells.youth ? ['kinder', 'elLow', 'elHigh', 'youth'] : DEPTS.map(d => d.key);
+    return `<div class="week-card"><h3>${fmtDate(w.date)}</h3>${keys.map(k => {
+      const c = w.cells[k]; if (!c) return '';
+      const mine = state.me && c.teacher === state.me;
+      return `<div class="item ${mine ? 'mine' : ''}" data-res="${esc(c.title)}"><span class="dept">${esc(deptLabel(k))}</span>
+        <span><b>${esc(c.title)}</b><br><span class="p">${esc(c.teacher)}${esc(c.tag || '')}</span></span></div>`;
+    }).join('')}</div>`;
+  }).join('');
+  $('#tableBody').innerHTML = table + `<div class="week-cards">${cards}</div>`;
 }
+$('#prevMonth').onclick = () => { state.monthIdx--; renderTable(); };
+$('#nextMonth').onclick = () => { state.monthIdx++; renderTable(); };
 
-$('#editor').addEventListener('input', e => {
-  const l = current(); if (!l) return;
-  const el = e.target;
-  if (el.dataset.f) { setPath(l, el.dataset.f, el.value); return scheduleSave(); }
-  const container = el.closest('[data-list]');
-  if (container && el.dataset.k) {
-    const arr = getPath(l, container.dataset.list);
-    const i = Number(el.closest('.list-item').dataset.i);
-    if (el.dataset.k === 'text') arr[i] = el.value; else arr[i][el.dataset.k] = el.value;
-    scheduleSave();
-  }
+// ---------- 자료 링크 수정 ----------
+let resEditing = '';
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-res]');
+  if (!el || !el.dataset.res) return;
+  if (e.target.closest('a')) return;
+  resEditing = el.dataset.res;
+  const r = state.resources[resEditing] || {};
+  $('#resTitle').textContent = resEditing;
+  $('#resTextbook').value = r.textbook || '';
+  $('#resTextbookUrl').value = r.textbookUrl || '';
+  $('#resYoutube').value = r.youtube || '';
+  $('#resNote').value = r.note || '';
+  $('#resMsg').innerHTML = `<a href="${SCHOOL_URL}" target="_blank" rel="noopener">연간공과일정 열기 ↗</a>`;
+  $('#resDialog').showModal();
 });
+$('#resSave').onclick = async () => {
+  const resource = {
+    textbook: $('#resTextbook').value.trim(), textbookUrl: $('#resTextbookUrl').value.trim(),
+    youtube: $('#resYoutube').value.trim(), note: $('#resNote').value.trim(),
+  };
+  const bad = [resource.textbookUrl, resource.youtube].find(u => u && !/^https?:\/\//.test(u));
+  if (bad) { $('#resMsg').textContent = '링크는 https:// 로 시작해야 합니다'; return; }
+  const empty = !Object.values(resource).some(Boolean);
+  try {
+    await api('/api/resources', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: resEditing, resource: empty ? null : resource }) });
+    if (empty) delete state.resources[resEditing]; else state.resources[resEditing] = resource;
+    $('#resDialog').close();
+    renderMine(); renderTable();
+  } catch (err) { $('#resMsg').textContent = `저장 실패: ${err.message}`; }
+};
 
-$('#editor').addEventListener('click', e => {
-  const l = current(); if (!l) return;
-  const add = e.target.closest('[data-add]');
-  if (add) {
-    const path = add.dataset.add;
-    const container = $(`[data-list="${path}"]`);
-    const arr = getPath(l, path) || [];
-    arr.push(container.dataset.kind === 'qa' ? { q: '', a: '' } : '');
-    setPath(l, path, arr);
-    renderListField(container);
-    $$('input', container).at(container.dataset.kind === 'qa' ? -2 : -1)?.focus();
-    return scheduleSave();
-  }
-  const rm = e.target.closest('[data-remove]');
-  if (rm) {
-    const container = rm.closest('[data-list]');
-    getPath(l, container.dataset.list).splice(Number(rm.closest('.list-item').dataset.i), 1);
-    renderListField(container);
-    return scheduleSave();
-  }
-  const tab = e.target.closest('[data-tab]');
-  if (tab) setTab(tab.dataset.tab);
-});
-
-function setTab(name) {
-  state.tab = name;
-  $$('[data-tab]').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
-  $$('[data-panel]').forEach(p => p.classList.toggle('hidden', p.dataset.panel !== name));
+// ---------- 배정표 입력 ----------
+function sundaysOf(month) {
+  const [y, m] = month.split('-').map(Number);
+  const out = []; const d = new Date(y, m - 1, 1);
+  while (d.getDay() !== 0) d.setDate(d.getDate() + 1);
+  while (d.getMonth() === m - 1) { out.push(`${y}-${String(m).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`); d.setDate(d.getDate() + 7); }
+  return out;
 }
-
-$('#newBtn').onclick = () => {
-  const l = newLesson();
-  state.lessons.push(l); persist(); openLesson(l.id);
-  $('[data-f="title"]').focus();
-};
-$('#deleteBtn').onclick = () => {
-  const l = current();
-  if (!l || !confirm(`"${l.title || '제목 없음'}" 공과를 삭제할까요?`)) return;
-  state.lessons = state.lessons.filter(x => x.id !== l.id); persist(); openLesson(null);
-};
-$('#lessonList').onclick = e => { const li = e.target.closest('li[data-id]'); if (li) openLesson(li.dataset.id); };
-$('#search').oninput = renderList;
-$('#menuBtn').onclick = () => $('#sidebar').classList.toggle('open');
-
-// ---------- 수업 모드 ----------
-const GROUP = { kids: '🧒 유초등부', teens: '🧑 중고등부' };
-let slides = [], slideIdx = 0, revealed = false;
-
-function buildSlides(l, group) {
-  const s = [];
-  const push = (title, body, answer) => { if (String(body || '').trim()) s.push({ title, body, answer }); };
-  push('오늘의 공과', [l.title, l.passage].filter(Boolean).join('\n'));
-  push(`말씀 · ${l.passage}`, l.scripture);
-  if (group === 'kids') {
-    push('이야기로 시작해요', l.kids.intro);
-    push('말씀 배우기', l.kids.explain);
-    push('핵심 메시지', l.keyMessage);
-    push('활동 시간', l.kids.activity);
-    l.kids.quiz.forEach((q, i) => push(`퀴즈 ${i + 1}`, q.q, q.a));
-    push('함께 외워요', l.kids.memory);
+const cellValue = c => (c ? { title: c.title || '', who: `${c.teacher || ''}${c.tag || ''}` } : { title: '', who: '' });
+function parseWho(s) {
+  const v = s.trim(); const m = v.match(/^(.+?)([A-Za-z])$/);
+  return m ? { teacher: m[1].trim(), tag: m[2] } : { teacher: v, tag: '' };
+}
+function editCell(key, label, c) {
+  const v = cellValue(c);
+  return `<div class="edit-cell" data-key="${key}"><span class="dept">${label}</span>
+    <input data-k="title" placeholder="공과 제목" value="${esc(v.title)}" />
+    <input data-k="who" placeholder="담당 (예: 유석준B)" value="${esc(v.who)}" /></div>`;
+}
+function weekEditor(w) {
+  const youth = !!w.cells.youth;
+  return `<div class="card edit-week">
+    <div class="head">
+      <input type="date" data-k="date" value="${esc(w.date)}" />
+      <label><input type="checkbox" data-k="youth" ${youth ? 'checked' : ''} /> 중고등 통합</label>
+      <div class="spacer"></div>
+      <button class="icon-btn" data-remove-week aria-label="이 주 삭제">✕</button>
+    </div>
+    <div class="edit-grid">
+      ${DEPTS.slice(0, 3).map(d => editCell(d.key, d.label, w.cells[d.key])).join('')}
+      ${youth ? editCell('youth', YOUTH.label, w.cells.youth)
+              : editCell('middle', '중등부', w.cells.middle) + editCell('high', '고등부', w.cells.high)}
+    </div></div>`;
+}
+function readWeek(el) {
+  const cells = {};
+  $$('.edit-cell', el).forEach(c => {
+    const title = $('[data-k=title]', c).value.trim(); const who = $('[data-k=who]', c).value;
+    if (title || who.trim()) cells[c.dataset.key] = { title, ...parseWho(who) };
+  });
+  return { date: $('[data-k=date]', el).value, cells };
+}
+function readEditor() {
+  return $$('.edit-week').map(readWeek).filter(w => w.date).sort((a, b) => a.date.localeCompare(b.date));
+}
+function renderEditor(month) {
+  $('#editMonth').value = month;
+  const s = state.schedules[month];
+  $('#editChurch').value = s?.church || '일산교회';
+  const weeks = s?.weeks?.length ? s.weeks : sundaysOf(month).map(date => ({ date, cells: {} }));
+  $('#editBody').innerHTML = weeks.map(weekEditor).join('');
+  $('#editMsg').textContent = s ? '저장된 배정표를 수정합니다' : '새 배정표 — 일요일이 자동으로 채워졌습니다';
+}
+$('#editMonth').onchange = e => e.target.value && renderEditor(e.target.value);
+$('#editBody').addEventListener('change', e => {
+  if (e.target.dataset.k !== 'youth') return;
+  // 통합 여부를 바꾸면 입력값을 유지한 채 그 주의 칸만 다시 그림
+  const weekEl = e.target.closest('.edit-week');
+  const cur = readWeek(weekEl);
+  if (e.target.checked) {
+    cur.cells.youth = cur.cells.middle || cur.cells.high || { title: '', teacher: '', tag: '' };
+    delete cur.cells.middle; delete cur.cells.high;
   } else {
-    push('생각해 보기', l.teens.intro);
-    push('말씀 이해하기', l.teens.explain);
-    push('핵심 메시지', l.keyMessage);
-    l.teens.discussion.forEach((q, i) => push(`토론 질문 ${i + 1}`, q));
-    push('삶에 적용하기', l.teens.apply);
+    const y = cur.cells.youth; delete cur.cells.youth;
+    if (y) { cur.cells.middle = { ...y }; cur.cells.high = { title: y.title, teacher: '', tag: '' }; }
   }
-  return s;
-}
-function renderSlide() {
-  const sl = slides[slideIdx];
-  $('#presentCount').textContent = `${slideIdx + 1} / ${slides.length}`;
-  $('#presentBody').innerHTML = `
-    <h2>${esc(sl.title)}</h2>
-    <div class="big">${esc(sl.body)}</div>
-    ${sl.answer && revealed ? `<div class="answer">정답: ${esc(sl.answer)}</div>` : ''}`;
-  $('#revealBtn').classList.toggle('hidden', !sl.answer);
-  $('#revealBtn').textContent = revealed ? '정답 숨기기' : '정답 보기';
-  $('#prevSlide').disabled = slideIdx === 0;
-  $('#nextSlide').disabled = slideIdx === slides.length - 1;
-}
-function go(d) { slideIdx = Math.max(0, Math.min(slides.length - 1, slideIdx + d)); revealed = false; renderSlide(); }
-
-$('#presentBtn').onclick = () => {
-  slides = buildSlides(current(), state.tab);
-  if (!slides.length) return alert('수업할 내용을 먼저 입력해 주세요.');
-  slideIdx = 0; revealed = false;
-  $('#presentGroup').textContent = GROUP[state.tab];
-  $('#present').classList.remove('hidden');
-  renderSlide();
-};
-$('#presentClose').onclick = () => $('#present').classList.add('hidden');
-$('#prevSlide').onclick = () => go(-1);
-$('#nextSlide').onclick = () => go(1);
-$('#revealBtn').onclick = () => { revealed = !revealed; renderSlide(); };
-document.addEventListener('keydown', e => {
-  if ($('#present').classList.contains('hidden')) return;
-  if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); go(1); }
-  if (e.key === 'ArrowLeft') go(-1);
-  if (e.key === 'Escape') $('#present').classList.add('hidden');
+  weekEl.outerHTML = weekEditor(cur);
 });
-
-// ---------- 인쇄 ----------
-$('#printBtn').onclick = () => {
-  const l = current(); const g = state.tab;
-  const sec = (h, t) => String(t || '').trim() ? `<h3>${h}</h3><p>${esc(t)}</p>` : '';
-  const kids = l.kids, teens = l.teens;
-  const body = g === 'kids'
-    ? sec('도입', kids.intro) + sec('쉬운 설명', kids.explain) + sec('활동', kids.activity)
-      + (kids.quiz.length ? `<h3>퀴즈</h3>${kids.quiz.map((q, i) => `<p>${i + 1}. ${esc(q.q)}<br>→ ${esc(q.a)}</p>`).join('')}` : '')
-      + sec('암송 구절', kids.memory)
-    : sec('도입 질문', teens.intro) + sec('말씀 설명', teens.explain)
-      + (teens.discussion.length ? `<h3>토론 질문</h3>${teens.discussion.map((q, i) => `<p>${i + 1}. ${esc(q)}</p>`).join('')}` : '')
-      + sec('삶에 적용하기', teens.apply);
-  $('#printArea').innerHTML = `
-    <h1>${esc(l.title)}</h1><p>${esc(l.date)} · ${esc(l.passage)} · ${GROUP[g]}</p>
-    ${sec('말씀', l.scripture)}${sec('핵심 메시지', l.keyMessage)}
-    <h2>${GROUP[g]} 진행안</h2>${body}`;
-  window.print();
+$('#editBody').addEventListener('click', e => { if (e.target.closest('[data-remove-week]')) e.target.closest('.edit-week').remove(); });
+$('#addWeek').onclick = () => {
+  const weeks = readEditor(); const last = weeks.at(-1)?.date;
+  let date = '';
+  if (last) { const [y, m, d] = last.split('-').map(Number); const n = new Date(y, m - 1, d + 7); date = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`; }
+  $('#editBody').insertAdjacentHTML('beforeend', weekEditor({ date, cells: {} }));
+};
+$('#saveSchedule').onclick = async () => {
+  const month = $('#editMonth').value;
+  if (!month) { $('#editMsg').textContent = '월을 선택하세요'; return; }
+  const schedule = { month, church: $('#editChurch').value.trim(), weeks: readEditor() };
+  const headers = { 'Content-Type': 'application/json' };
+  if (state.adminLocked) {
+    const pw = prompt('관리자 비밀번호'); if (pw === null) return;
+    headers['X-Admin-Password'] = pw;
+  }
+  try {
+    await api(`/api/schedules/${month}`, { method: 'PUT', headers, body: JSON.stringify(schedule) });
+    state.schedules[month] = schedule;
+    if (!state.months.includes(month)) { state.months.push(month); state.months.sort(); }
+    state.monthIdx = state.months.indexOf(month);
+    $('#editMsg').textContent = '✅ 저장되었습니다';
+    renderMine(); renderTable();
+  } catch (err) { $('#editMsg').textContent = `저장 실패: ${err.message}`; }
 };
 
-// ---------- API ----------
-async function checkApi() {
-  const badge = $('#apiBadge');
-  try {
-    const r = await fetch('/api/status').then(r => r.json());
-    badge.textContent = r.configured ? 'API 연결됨' : 'API 키 미설정';
-    badge.classList.toggle('ok', r.configured);
-  } catch {
-    badge.textContent = '서버 연결 안 됨';
-  }
+// ---------- 화면 전환 ----------
+function show(view) {
+  $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
+  $$('[data-section]').forEach(s => s.classList.toggle('hidden', s.dataset.section !== view));
+  ls.set('teach.view', view);
 }
-$('#apiBtn').onclick = () => $('#apiDialog').showModal();
-$('#apiSend').onclick = async () => {
-  const out = $('#apiOut');
-  let params;
-  try { params = JSON.parse($('#apiParams').value || '{}'); } catch { out.textContent = '파라미터 JSON 형식이 올바르지 않습니다.'; return; }
-  out.textContent = '요청 중…';
-  try {
-    const r = await fetch('/api/jbch', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ method: $('#apiMethod').value, path: $('#apiPath').value, params }),
-    });
-    out.textContent = JSON.stringify(await r.json(), null, 2);
-  } catch (err) {
-    out.textContent = `실패: ${err.message}`;
-  }
-};
+$$('.nav-btn').forEach(b => (b.onclick = () => show(b.dataset.view)));
 
-renderList();
-openLesson(state.lessons[0]?.id ?? null);
-checkApi();
+(async () => {
+  try { await loadAll(); }
+  catch (err) { $('#mineBody').innerHTML = `<div class="empty">서버에 연결할 수 없습니다: ${esc(err.message)}</div>`; return; }
+  renderMine(); renderTable();
+  renderEditor(state.months.at(-1) || todayISO().slice(0, 7));
+  show(ls.get('teach.view') || 'mine');
+})();

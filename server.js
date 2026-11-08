@@ -1,6 +1,6 @@
-// 공과강사 서버: 정적 파일 제공 + api.jbch.org 프록시 (토큰은 서버에만 보관)
+// 공과강사 서버: 정적 파일 + 배정표/공과자료 저장 API + api.jbch.org 프록시 (토큰은 서버에만 보관)
 import http from 'node:http';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile, readdir, rename } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,7 +8,10 @@ const PORT = Number(process.env.PORT) || 3000;
 const BASE_URL = (process.env.JBCH_BASE_URL || 'https://api.jbch.org').replace(/\/+$/, '');
 const DEV_NAME = process.env.JBCH_DEV_NAME || '';
 const TOKEN_ID = process.env.JBCH_TOKEN_ID || '';
-const PUBLIC_DIR = join(fileURLToPath(new URL('.', import.meta.url)), 'public');
+const ROOT = fileURLToPath(new URL('.', import.meta.url));
+const PUBLIC_DIR = join(ROOT, 'public');
+const DATA_DIR = join(ROOT, 'data');
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -78,6 +81,65 @@ async function proxyJbch(req, res) {
   }
 }
 
+// ---------- 배정표 / 공과 자료 저장소 (data/*.json) ----------
+async function readJson(file, fallback) {
+  try { return JSON.parse(await readFile(join(DATA_DIR, file), 'utf8')); } catch { return fallback; }
+}
+async function writeJson(file, data) {
+  const tmp = join(DATA_DIR, `.${file}.tmp`);
+  await writeFile(tmp, JSON.stringify(data, null, 2));
+  await rename(tmp, join(DATA_DIR, file));
+}
+function canEdit(req) {
+  return !ADMIN_PASSWORD || req.headers['x-admin-password'] === ADMIN_PASSWORD;
+}
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+
+function validSchedule(s, month) {
+  return s && s.month === month && Array.isArray(s.weeks) &&
+    s.weeks.every(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date) && w.cells && typeof w.cells === 'object');
+}
+
+async function handleData(req, res, path) {
+  if (path === '/api/schedules' && req.method === 'GET') {
+    const files = (await readdir(DATA_DIR).catch(() => [])).filter(f => /^schedule-\d{4}-\d{2}\.json$/.test(f));
+    return sendJson(res, 200, files.map(f => f.slice(9, 16)).sort());
+  }
+  const m = path.match(/^\/api\/schedules\/(\d{4}-\d{2})$/);
+  if (m && MONTH_RE.test(m[1])) {
+    const file = `schedule-${m[1]}.json`;
+    if (req.method === 'GET') {
+      const data = await readJson(file, null);
+      return data ? sendJson(res, 200, data) : sendJson(res, 404, { error: '배정표 없음' });
+    }
+    if (req.method === 'PUT') {
+      if (!canEdit(req)) return sendJson(res, 401, { error: '관리자 비밀번호가 틀렸습니다' });
+      let body; try { body = JSON.parse(await readBody(req)); } catch { return sendJson(res, 400, { error: '잘못된 JSON' }); }
+      if (!validSchedule(body, m[1])) return sendJson(res, 400, { error: '배정표 형식이 올바르지 않습니다' });
+      await writeJson(file, body);
+      return sendJson(res, 200, { ok: true });
+    }
+  }
+  if (path === '/api/resources') {
+    if (req.method === 'GET') return sendJson(res, 200, await readJson('resources.json', {}));
+    if (req.method === 'PUT') {
+      // 공과 제목 하나의 자료(교재/영상 링크)만 갱신: { title, resource: {textbook, textbookUrl, youtube, note} | null }
+      let body; try { body = JSON.parse(await readBody(req)); } catch { return sendJson(res, 400, { error: '잘못된 JSON' }); }
+      const title = String(body.title || '').trim();
+      if (!title) return sendJson(res, 400, { error: 'title 필요' });
+      const all = await readJson('resources.json', {});
+      if (body.resource) {
+        const r = body.resource;
+        const url = v => (/^https?:\/\//.test(String(v || '').trim()) ? String(v).trim() : '');
+        all[title] = { textbook: String(r.textbook || '').slice(0, 200), textbookUrl: url(r.textbookUrl), youtube: url(r.youtube), note: String(r.note || '').slice(0, 2000) };
+      } else delete all[title];
+      await writeJson('resources.json', all);
+      return sendJson(res, 200, { ok: true });
+    }
+  }
+  return false;
+}
+
 async function serveStatic(req, res) {
   const urlPath = decodeURIComponent(new URL(req.url, 'http://x').pathname);
   const rel = normalize(urlPath === '/' ? '/index.html' : urlPath).replace(/^([/\\])+/, '');
@@ -95,8 +157,13 @@ async function serveStatic(req, res) {
 
 const server = http.createServer(async (req, res) => {
   try {
-    if (req.url === '/api/status' && req.method === 'GET') {
-      return sendJson(res, 200, { configured: Boolean(DEV_NAME && TOKEN_ID), baseUrl: BASE_URL });
+    const path = new URL(req.url, 'http://x').pathname;
+    if (path === '/api/status' && req.method === 'GET') {
+      return sendJson(res, 200, { configured: Boolean(DEV_NAME && TOKEN_ID), adminLocked: Boolean(ADMIN_PASSWORD) });
+    }
+    if (path.startsWith('/api/') && path !== '/api/jbch') {
+      if ((await handleData(req, res, path)) !== false) return;
+      return sendJson(res, 404, { error: 'not found' });
     }
     if (req.url === '/api/jbch' && req.method === 'POST') return await proxyJbch(req, res);
     if (req.method === 'GET') return await serveStatic(req, res);

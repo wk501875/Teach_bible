@@ -8,135 +8,83 @@
 </head>
 <body>
   <header class="topbar">
-    <button class="icon-btn only-mobile" id="menuBtn" aria-label="공과 목록">☰</button>
     <h1>📖 공과강사</h1>
-    <span class="api-badge" id="apiBadge" title="API 연결 상태">API 확인 중…</span>
-    <div class="spacer"></div>
-    <button class="btn ghost" id="apiBtn">API 테스트</button>
+    <nav class="nav" role="tablist">
+      <button class="nav-btn active" data-view="mine">내 공과</button>
+      <button class="nav-btn" data-view="table">배정표</button>
+      <button class="nav-btn" data-view="edit">배정표 입력</button>
+    </nav>
   </header>
 
-  <div class="layout">
-    <aside class="sidebar" id="sidebar">
-      <button class="btn primary block" id="newBtn">＋ 새 공과</button>
-      <input type="search" id="search" placeholder="공과 검색" aria-label="공과 검색" />
-      <ul class="lesson-list" id="lessonList"></ul>
-    </aside>
+  <main class="main">
+    <!-- 내 공과 -->
+    <section data-section="mine">
+      <div class="who">
+        <label for="meSelect">내 이름</label>
+        <select id="meSelect"><option value="">선택하세요</option></select>
+      </div>
+      <div id="mineBody"></div>
+    </section>
 
-    <main class="main">
-      <section class="empty" id="emptyState">
-        <p>왼쪽에서 공과를 선택하거나 <strong>새 공과</strong>를 만들어 주세요.</p>
-      </section>
+    <!-- 배정표 -->
+    <section data-section="table" class="hidden">
+      <div class="month-bar">
+        <button class="btn" id="prevMonth" aria-label="이전 달">◀</button>
+        <h2 id="monthTitle"></h2>
+        <button class="btn" id="nextMonth" aria-label="다음 달">▶</button>
+      </div>
+      <div id="tableBody"></div>
+    </section>
 
-      <section class="editor hidden" id="editor">
-        <div class="card">
-          <div class="row">
-            <label class="field grow">제목
-              <input data-f="title" placeholder="예: 다윗과 골리앗" />
-            </label>
-            <label class="field">날짜
-              <input type="date" data-f="date" />
-            </label>
-          </div>
-          <label class="field">본문 구절
-            <input data-f="passage" placeholder="예: 사무엘상 17:41-50" />
+    <!-- 배정표 입력 -->
+    <section data-section="edit" class="hidden">
+      <div class="card">
+        <div class="row">
+          <label class="field">월
+            <input type="month" id="editMonth" />
           </label>
-          <label class="field">말씀 본문
-            <textarea data-f="scripture" rows="4" placeholder="성경 구절 내용을 붙여 넣으세요"></textarea>
-          </label>
-          <label class="field">핵심 메시지 (한 문장)
-            <input data-f="keyMessage" placeholder="예: 하나님이 함께하시면 두려워할 것이 없어요" />
+          <label class="field grow">교회
+            <input id="editChurch" value="일산교회" />
           </label>
         </div>
+        <p class="hint">담당자는 배정표처럼 <b>이름+표시</b>로 적으세요 (예: <code>유석준B</code>). 공과 제목이 같은 칸은 자료 링크를 함께 씁니다.</p>
+      </div>
+      <div id="editBody"></div>
+      <div class="actions">
+        <span class="msg" id="editMsg"></span>
+        <div class="spacer"></div>
+        <button class="btn" id="addWeek">＋ 주 추가</button>
+        <button class="btn primary" id="saveSchedule">저장</button>
+      </div>
+    </section>
+  </main>
 
-        <div class="tabs" role="tablist">
-          <button class="tab active" role="tab" data-tab="kids">🧒 유초등부</button>
-          <button class="tab" role="tab" data-tab="teens">🧑 중고등부</button>
-        </div>
-
-        <div class="card tab-panel" data-panel="kids">
-          <label class="field">도입 (이야기·질문으로 시작하기)
-            <textarea data-f="kids.intro" rows="3" placeholder="아이들의 관심을 끄는 짧은 이야기"></textarea>
-          </label>
-          <label class="field">쉬운 설명
-            <textarea data-f="kids.explain" rows="5" placeholder="말씀을 아이들 눈높이로 풀어 설명"></textarea>
-          </label>
-          <label class="field">활동 / 게임
-            <textarea data-f="kids.activity" rows="3" placeholder="만들기, 게임, 율동 등"></textarea>
-          </label>
-          <div class="field">퀴즈
-            <div class="list" data-list="kids.quiz" data-kind="qa"></div>
-            <button class="btn small" data-add="kids.quiz">＋ 퀴즈 추가</button>
-          </div>
-          <label class="field">암송 구절
-            <input data-f="kids.memory" placeholder="함께 외울 구절" />
-          </label>
-        </div>
-
-        <div class="card tab-panel hidden" data-panel="teens">
-          <label class="field">도입 질문
-            <textarea data-f="teens.intro" rows="3" placeholder="생각을 여는 질문"></textarea>
-          </label>
-          <label class="field">말씀 설명
-            <textarea data-f="teens.explain" rows="6" placeholder="본문의 배경과 의미"></textarea>
-          </label>
-          <div class="field">토론 질문
-            <div class="list" data-list="teens.discussion" data-kind="text"></div>
-            <button class="btn small" data-add="teens.discussion">＋ 질문 추가</button>
-          </div>
-          <label class="field">삶에 적용하기
-            <textarea data-f="teens.apply" rows="3" placeholder="이번 주 실천할 것"></textarea>
-          </label>
-        </div>
-
-        <div class="actions">
-          <span class="saved" id="savedMsg"></span>
-          <div class="spacer"></div>
-          <button class="btn danger" id="deleteBtn">삭제</button>
-          <button class="btn" id="printBtn">인쇄</button>
-          <button class="btn primary" id="presentBtn">▶ 수업 모드</button>
-        </div>
-      </section>
-    </main>
-  </div>
-
-  <!-- 수업 모드: 큰 글씨로 한 단계씩 -->
-  <div class="present hidden" id="present">
-    <div class="present-top">
-      <span id="presentGroup"></span>
-      <span id="presentCount"></span>
-      <button class="icon-btn" id="presentClose" aria-label="닫기">✕</button>
-    </div>
-    <div class="present-body" id="presentBody"></div>
-    <div class="present-nav">
-      <button class="btn" id="prevSlide">◀ 이전</button>
-      <button class="btn" id="revealBtn">정답 보기</button>
-      <button class="btn primary" id="nextSlide">다음 ▶</button>
-    </div>
-  </div>
-
-  <!-- API 테스트 -->
-  <dialog id="apiDialog">
+  <!-- 공과 자료 -->
+  <dialog id="resDialog">
     <form method="dialog" class="dialog-head">
-      <h2>api.jbch.org 테스트</h2>
+      <h2 id="resTitle"></h2>
       <button class="icon-btn" aria-label="닫기">✕</button>
     </form>
-    <p class="hint">dev_name · tokenId 는 서버(.env)에서 자동으로 붙습니다. 매뉴얼의 경로와 파라미터를 넣어 응답을 확인하세요.</p>
-    <div class="row">
-      <label class="field">방식
-        <select id="apiMethod"><option>POST</option><option>GET</option></select>
-      </label>
-      <label class="field grow">경로
-        <input id="apiPath" placeholder="예: board/list" />
-      </label>
-    </div>
-    <label class="field">파라미터 (JSON)
-      <textarea id="apiParams" rows="4">{}</textarea>
+    <p class="hint">교회학교 홈페이지 연간공과일정에서 확인한 교재와 영상 링크를 저장하면 모든 강사가 함께 봅니다.</p>
+    <label class="field">교재 (예: 참빛 11월호 3과 / 머릿돌 24쪽)
+      <input id="resTextbook" />
     </label>
-    <button class="btn primary" id="apiSend">요청 보내기</button>
-    <pre class="api-out" id="apiOut"></pre>
+    <label class="field">교재·공과일정 링크
+      <input id="resTextbookUrl" type="url" placeholder="https://" />
+    </label>
+    <label class="field">유튜브 공과 말씀 링크
+      <input id="resYoutube" type="url" placeholder="https://youtu.be/..." />
+    </label>
+    <label class="field">메모 (본문 구절, 준비물 등)
+      <textarea id="resNote" rows="3"></textarea>
+    </label>
+    <div class="actions">
+      <span class="msg" id="resMsg"></span>
+      <div class="spacer"></div>
+      <button class="btn primary" id="resSave">저장</button>
+    </div>
   </dialog>
 
-  <div class="print-area" id="printArea"></div>
   <script src="app.js" type="module"></script>
 </body>
 </html>

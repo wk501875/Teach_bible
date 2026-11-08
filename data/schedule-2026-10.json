@@ -1,0 +1,121 @@
+{
+  "month": "2026-10",
+  "church": "일산교회",
+  "weeks": [
+    {
+      "date": "2026-10-04",
+      "cells": {
+        "kinder": {
+          "title": "물로 포도주를 만드셨어요",
+          "teacher": "이시은",
+          "tag": "B"
+        },
+        "elLow": {
+          "title": "구원을 이루신 예수님",
+          "teacher": "김민수",
+          "tag": "B"
+        },
+        "elHigh": {
+          "title": "구원을 이루신 예수님",
+          "teacher": "정보석",
+          "tag": "B"
+        },
+        "middle": {
+          "title": "참된 예배",
+          "teacher": "김반석",
+          "tag": "E"
+        },
+        "high": {
+          "title": "참된 예배",
+          "teacher": "김재식",
+          "tag": "E"
+        }
+      }
+    },
+    {
+      "date": "2026-10-11",
+      "cells": {
+        "kinder": {
+          "title": "예수님께서 아픈 사람을 고쳐 주셨어요",
+          "teacher": "장세현",
+          "tag": "T"
+        },
+        "elLow": {
+          "title": "살아나신 예수님",
+          "teacher": "최준식",
+          "tag": "T"
+        },
+        "elHigh": {
+          "title": "살아나신 예수님",
+          "teacher": "허형강",
+          "tag": "T"
+        },
+        "middle": {
+          "title": "내가 거룩하니 너희도 거룩하라",
+          "teacher": "신동하",
+          "tag": "B"
+        },
+        "high": {
+          "title": "내가 거룩하니 너희도 거룩하라",
+          "teacher": "오인성",
+          "tag": "B"
+        }
+      }
+    },
+    {
+      "date": "2026-10-18",
+      "cells": {
+        "kinder": {
+          "title": "많은 사람을 먹이셨어요",
+          "teacher": "김진엽",
+          "tag": "B"
+        },
+        "elLow": {
+          "title": "다시 오실 예수님",
+          "teacher": "이시후",
+          "tag": "B"
+        },
+        "elHigh": {
+          "title": "가을 성경학교 2일차",
+          "teacher": "강성훈",
+          "tag": "T"
+        },
+        "youth": {
+          "title": "호흡이 있는 자마다 주를 찬양할지어다",
+          "teacher": "박승언",
+          "tag": "P"
+        }
+      }
+    },
+    {
+      "date": "2026-10-25",
+      "cells": {
+        "kinder": {
+          "title": "거친 바다를 잔잔하게 하셨어요",
+          "teacher": "주신욱",
+          "tag": "T"
+        },
+        "elLow": {
+          "title": "포도나무의 비유",
+          "teacher": "최원우",
+          "tag": "T"
+        },
+        "elHigh": {
+          "title": "가을 성경학교 4일차",
+          "teacher": "이진우",
+          "tag": "T"
+        },
+        "middle": {
+          "title": "하나님께 인도함을 받은 야곱",
+          "teacher": "정지섭",
+          "tag": "B"
+        },
+        "high": {
+          "title": "하나님께 인도함을 받은 야곱",
+          "teacher": "이종환",
+          "tag": "P"
+        }
+      }
+    }
+  ]
+}

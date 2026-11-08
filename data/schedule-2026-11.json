@@ -1,0 +1,146 @@
+{
+  "month": "2026-11",
+  "church": "일산교회",
+  "weeks": [
+    {
+      "date": "2026-11-01",
+      "cells": {
+        "kinder": {
+          "title": "죽은 나사로를 살리셨어요",
+          "teacher": "유석준",
+          "tag": "B"
+        },
+        "elLow": {
+          "title": "예수님을 증거한 베드로",
+          "teacher": "신동하",
+          "tag": "B"
+        },
+        "elHigh": {
+          "title": "예수님을 증거한 베드로",
+          "teacher": "허형강",
+          "tag": "T"
+        },
+        "youth": {
+          "title": "야곱을 이스라엘로 바꾸시는 하나님",
+          "teacher": "양상구",
+          "tag": "p"
+        }
+      }
+    },
+    {
+      "date": "2026-11-08",
+      "cells": {
+        "kinder": {
+          "title": "다시 찾은 아들",
+          "teacher": "정보석",
+          "tag": "B"
+        },
+        "elLow": {
+          "title": "빌립의 전도",
+          "teacher": "오인성",
+          "tag": "B"
+        },
+        "elHigh": {
+          "title": "빌립의 전도",
+          "teacher": "김유빈",
+          "tag": "B"
+        },
+        "youth": {
+          "title": "대전도집회 생활말씀",
+          "teacher": "",
+          "tag": ""
+        }
+      }
+    },
+    {
+      "date": "2026-11-15",
+      "cells": {
+        "kinder": {
+          "title": "삭개오는 예수님을 만났어요",
+          "teacher": "최원우",
+          "tag": "T"
+        },
+        "elLow": {
+          "title": "변화된 바울",
+          "teacher": "정수영",
+          "tag": "T"
+        },
+        "elHigh": {
+          "title": "변화된 바울",
+          "teacher": "주신욱",
+          "tag": "T"
+        },
+        "middle": {
+          "title": "악을 선으로 갚은 요셉",
+          "teacher": "정지섭",
+          "tag": "B"
+        },
+        "high": {
+          "title": "악을 선으로 갚은 요셉",
+          "teacher": "이종환",
+          "tag": "p"
+        }
+      }
+    },
+    {
+      "date": "2026-11-22",
+      "cells": {
+        "kinder": {
+          "title": "예수님께서 제자의 발을 씻기셨어요",
+          "teacher": "김민수",
+          "tag": "B"
+        },
+        "elLow": {
+          "title": "고넬료 가족에게 전해진 복음",
+          "teacher": "이진우",
+          "tag": "T"
+        },
+        "elHigh": {
+          "title": "고넬료 가족에게 전해진 복음",
+          "teacher": "이준원",
+          "tag": "T"
+        },
+        "middle": {
+          "title": "이유를 모르는 고난을 이겨낸 욥",
+          "teacher": "김재식",
+          "tag": "e"
+        },
+        "high": {
+          "title": "이유를 모르는 고난을 이겨낸 욥",
+          "teacher": "김원규",
+          "tag": "D"
+        }
+      }
+    },
+    {
+      "date": "2026-11-29",
+      "cells": {
+        "kinder": {
+          "title": "고난 받으신 예수님",
+          "teacher": "장세현",
+          "tag": "T"
+        },
+        "elLow": {
+          "title": "이방인에게 복음을 전한 바울",
+          "teacher": "김장성",
+          "tag": "T"
+        },
+        "elHigh": {
+          "title": "이방인에게 복음을 전한 바울",
+          "teacher": "최준식",
+          "tag": "T"
+        },
+        "middle": {
+          "title": "씨 뿌리는 비유",
+          "teacher": "강성훈",
+          "tag": "T"
+        },
+        "high": {
+          "title": "씨 뿌리는 비유",
+          "teacher": "박승언",
+          "tag": "p"
+        }
+      }
+    }
+  ]
+}
