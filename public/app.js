@@ -562,6 +562,7 @@ async function initPush() {
   if (!state.push.supported) return;
   try {
     swReg = await navigator.serviceWorker.register('/sw.js');
+    api('/api/push/key').then(r => { state.pushKey = r.publicKey; }).catch(() => {});
     const sub = await swReg.pushManager.getSubscription();
     state.push.on = Boolean(sub) && Notification.permission === 'granted';
   } catch { state.push.supported = false; }
@@ -582,11 +583,12 @@ async function pushDiag() {
 }
 
 // 알림 허용 대기: 허용 창 응답, 또는 사용자가 크롬 사이트 설정에서 직접 허용으로 바꾼 경우 둘 다 감지
-function waitPermission() {
+function waitPermission(early, earlyPerm) {
   return new Promise(resolve => {
     let done = false;
     const finish = v => { if (!done) { done = true; clearInterval(timer); resolve(v); } };
-    Notification.requestPermission().then(finish, () => {});
+    early?.then(() => finish('granted'), () => {});
+    (earlyPerm || Notification.requestPermission()).then(v => { if (v !== 'default') finish(v); }, () => {});
     // 설정에서 바꾸고 돌아오면 이어서 진행
     const timer = setInterval(() => { if (Notification.permission !== 'default') finish(Notification.permission); }, 1000);
     navigator.permissions?.query({ name: 'notifications' }).then(st => { st.onchange = () => { if (st.state !== 'prompt') finish(st.state === 'granted' ? 'granted' : 'denied'); }; }).catch(() => {});
@@ -597,8 +599,17 @@ const withTimeout = (promise, ms, msg) => Promise.race([promise, new Promise((_,
 function pushStep(msg) { state.push.msg = msg; renderSettings(); }
 async function togglePush() {
   const p = state.push; if (p.busy) return;
+  // 허용 창은 '터치 직후'에 요청해야 뜬다 → 다른 await 보다 먼저, 두 가지 방식으로 동시에 요청
+  let early = null, earlyPerm = null;
+  if (!p.on && 'Notification' in window && Notification.permission === 'default') {
+    if (swReg?.active && state.pushKey) {
+      early = swReg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(state.pushKey) });
+      early.catch(() => {});
+    }
+    try { earlyPerm = Notification.requestPermission(); earlyPerm?.catch?.(() => {}); } catch {}
+  }
   p.busy = true; p.error = false;
-  await pushDiag();
+  pushDiag().then(() => { if (p.busy) renderSettings(); });
   try {
     if (p.on) {
       pushStep('알림을 끄는 중…');
@@ -609,8 +620,13 @@ async function togglePush() {
       if (Notification.permission === 'denied') throw new Error('알림이 차단되어 있습니다. 주소창 왼쪽 아이콘 → 권한 → 알림을 허용으로 바꾼 뒤 다시 눌러 주세요');
       if (Notification.permission !== 'granted') {
         // 크롬은 허용 창 대신 주소창에 작은 종 아이콘만 띄우기도 함
-        pushStep('알림 허용을 기다리는 중… 허용 창이 안 뜨면 크롬 ⋮ → 설정 → 사이트 설정 → 알림에서 이 사이트를 허용으로 바꾼 뒤 돌아오세요');
-        const perm = await withTimeout(waitPermission(), 180000, '알림 허용 응답이 없습니다. 크롬 설정 → 사이트 설정 → 알림에서 이 사이트를 허용해 주세요');
+        const standalone = matchMedia('(display-mode: standalone)').matches;
+        const samsung = /SamsungBrowser/.test(navigator.userAgent);
+        pushStep(standalone
+          ? '알림 허용을 기다리는 중… 허용 창이 안 뜨면 휴대폰 설정 → 애플리케이션 → 공과강사 → 알림을 켜고 돌아오세요'
+          : samsung ? '알림 허용을 기다리는 중… 허용 창이 안 뜨면 삼성 인터넷 ≡ → 설정 → 사이트 및 다운로드 → 알림에서 허용해 주세요'
+          : '알림 허용을 기다리는 중… 허용 창이 안 뜨면 브라우저 설정 → 사이트 설정 → 알림에서 이 사이트를 허용해 주세요');
+        const perm = await withTimeout(waitPermission(early, earlyPerm), 180000, '알림 허용 응답이 없습니다. 크롬 설정 → 사이트 설정 → 알림에서 이 사이트를 허용해 주세요');
         if (perm !== 'granted') throw new Error('알림을 허용해야 받을 수 있습니다. 주소창 왼쪽 아이콘 → 권한 → 알림을 허용해 주세요');
       }
       pushStep('알림 등록 중…');
@@ -619,7 +635,7 @@ async function togglePush() {
       const reg = await withTimeout(navigator.serviceWorker.ready, 10000, 'sw-timeout').catch(() => swReg);
       swReg = reg;
       const { publicKey } = await api('/api/push/key');
-      let sub = await reg.pushManager.getSubscription();
+      let sub = (early && await early.catch(() => null)) || await reg.pushManager.getSubscription();
       if (!sub) {
         try { sub = await withTimeout(reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(publicKey) }), 20000, '알림 서버 응답이 없습니다. 인터넷 연결을 확인하고 다시 눌러 주세요'); }
         catch (e) { throw new Error(e.message?.includes('알림 서버') ? e.message : `알림 등록 실패: ${e.name || ''} ${e.message || e}`.trim()); }
