@@ -42,7 +42,8 @@ async function handleApi(req, env, url) {
   if (auth) return auth;
 
   if (path === '/api/status' && req.method === 'GET') {
-    return json({ adminLocked: Boolean(env.ADMIN_PASSWORD) });
+    // 설정 확인용: 값은 절대 보내지 않고 들어 있는지만 알려줌
+    return json({ adminLocked: Boolean(env.ADMIN_PASSWORD), keys: { JBCH_DEV_NAME: Boolean(env.JBCH_DEV_NAME), JBCH_TOKEN_ID: Boolean(env.JBCH_TOKEN_ID) } });
   }
 
   if (path === '/api/schedules' && req.method === 'GET') return json(await listMonths(env));
