@@ -4,9 +4,10 @@ import { handleAuth } from './auth.js';
 import { handlePush, runDailyReminders } from './push.js';
 import seed202610 from '../data/schedule-2026-10.json';
 import seed202611 from '../data/schedule-2026-11.json';
+import seed202612 from '../data/schedule-2026-12.json';
 
 // KV가 비어 있을 때 쓰는 기본 배정표
-const SEED = { '2026-10': seed202610, '2026-11': seed202611 };
+const SEED = { '2026-10': seed202610, '2026-11': seed202611, '2026-12': seed202612 };
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
 const json = (data, status = 200) =>

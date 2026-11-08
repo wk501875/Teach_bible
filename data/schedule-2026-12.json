@@ -1,0 +1,116 @@
+{
+  "month": "2026-12",
+  "church": "일산교회",
+  "weeks": [
+    {
+      "date": "2026-12-06",
+      "cells": {
+        "kinder": {
+          "title": "예수님께서 다시 살아나셨어요",
+          "teacher": "주신욱",
+          "tag": "T"
+        },
+        "elLow": {
+          "title": "하나님의 사람 디모데",
+          "teacher": "김진엽",
+          "tag": "B"
+        },
+        "elHigh": {
+          "title": "하나님의 사람 디모데",
+          "teacher": "이시은",
+          "tag": "B"
+        },
+        "youth": {
+          "title": "돌아온 탕자",
+          "teacher": "박승언",
+          "tag": "P"
+        }
+      }
+    },
+    {
+      "date": "2026-12-13",
+      "cells": {
+        "kinder": {
+          "title": "다시 오실 예수님",
+          "teacher": "이시후",
+          "tag": "B"
+        },
+        "elLow": {
+          "title": "성령의 열매",
+          "teacher": "허형강",
+          "tag": "T"
+        },
+        "elHigh": {
+          "title": "성령의 열매",
+          "teacher": "김반석",
+          "tag": "E"
+        },
+        "middle": {
+          "title": "불의한 청지기의 비유",
+          "teacher": "이진우",
+          "tag": "T"
+        },
+        "high": {
+          "title": "불의한 청지기의 비유",
+          "teacher": "김재식",
+          "tag": "E"
+        }
+      }
+    },
+    {
+      "date": "2026-12-20",
+      "cells": {
+        "kinder": {
+          "title": "천국",
+          "teacher": "신동하",
+          "tag": "B"
+        },
+        "elLow": {
+          "title": "새 하늘과 새 땅",
+          "teacher": "장세현",
+          "tag": "T"
+        },
+        "elHigh": {
+          "title": "새 하늘과 새 땅",
+          "teacher": "최원우",
+          "tag": "T"
+        },
+        "youth": {
+          "title": "두 아들의 비유",
+          "teacher": "이종환",
+          "tag": "P"
+        }
+      }
+    },
+    {
+      "date": "2026-12-27",
+      "cells": {
+        "kinder": {
+          "title": "하나님 감사해요",
+          "teacher": "김유빈",
+          "tag": "B"
+        },
+        "elLow": {
+          "title": "학년을 마치며",
+          "teacher": "정수영",
+          "tag": "T"
+        },
+        "elHigh": {
+          "title": "학년을 마치며",
+          "teacher": "최준식",
+          "tag": "T"
+        },
+        "middle": {
+          "title": "달란트의 비유",
+          "teacher": "강성훈",
+          "tag": "T"
+        },
+        "high": {
+          "title": "달란트의 비유",
+          "teacher": "양상구",
+          "tag": "P"
+        }
+      }
+    }
+  ]
+}
