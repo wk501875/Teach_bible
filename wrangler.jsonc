@@ -8,6 +8,8 @@
   "kv_namespaces": [{ "binding": "DATA" }],
   // 대시보드에서 넣은 변수(Text 타입 포함)가 Git 배포 때 지워지지 않게 유지
   "keep_vars": true,
+  // 배정표 이미지 읽기용 Cloudflare Workers AI (무료 사용량)
+  "ai": { "binding": "AI" },
   // 매일 00:00 UTC = 한국시간 오전 9시: 공과 알림
   "triggers": { "crons": ["0 0 * * *"] },
   "observability": { "enabled": true }

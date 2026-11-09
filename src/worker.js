@@ -4,6 +4,7 @@ import { handleAuth, getSession } from './auth.js';
 import { handlePush, runDailyReminders } from './push.js';
 import { handleCalendar } from './calendar.js';
 import { handleFeatures, isAdmin } from './features.js';
+import { handleScheduleImage } from './ocr.js';
 import seed202610 from '../data/schedule-2026-10.json';
 import seed202611 from '../data/schedule-2026-11.json';
 import seed202612 from '../data/schedule-2026-12.json';
@@ -116,6 +117,12 @@ async function handleApi(req, env, url, waitUntil = p => p) {
       else errors[k] = String(results[i].reason?.message || results[i].reason);
     });
     return json({ year, schedules, errors });
+  }
+
+  // 배정표 이미지 읽기 (관리자, 무료 AI)
+  if (path === '/api/schedule-image' && req.method === 'POST') {
+    if (!(await isAdmin(env, session))) return json({ error: '관리자만 사용할 수 있습니다' }, 403);
+    return handleScheduleImage(req, env);
   }
 
   // 내 공과 캘린더 파일

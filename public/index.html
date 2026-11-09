@@ -92,6 +92,12 @@
     </div>
     <div class="stats" id="editStats"></div>
     <div class="card card-pad paste-card">
+      <b>이미지로 읽기 <span class="muted" style="font-weight:500;font-size:.8rem">무료 AI · 선택</span></b>
+      <p class="hint">배정표 이미지를 고르면 AI가 읽어서 아래 칸을 채웁니다. 틀릴 수 있으니 노란 테두리 칸을 꼭 확인하고 저장하세요.</p>
+      <div class="actions" style="margin-bottom:0"><input type="file" id="ocrFile" accept="image/*" class="file-input" /><button class="btn small dark" id="ocrRun">읽기</button></div>
+      <p class="msg" id="ocrMsg"></p>
+    </div>
+    <div class="card card-pad paste-card">
       <b>엑셀에서 붙여넣기</b>
       <p class="hint">배정표 엑셀에서 일자부터 고등부까지 표 전체를 복사해 아래에 붙여넣으세요. 칸이 자동으로 채워집니다.</p>
       <textarea id="pasteBox" rows="3" placeholder="여기에 붙여넣기"></textarea>

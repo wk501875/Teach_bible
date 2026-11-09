@@ -826,6 +826,97 @@ $('#pasteApply').onclick = () => {
   $('#editMsg').textContent = '붙여넣기로 채움 · 저장 전';
 };
 
+// ---------- 이미지로 읽기 (무료 AI) ----------
+function shrinkImage(file, max = 1600) {
+  return new Promise((resolve, reject) => {
+    const img = new Image(); const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(url); resolve(c.toDataURL('image/jpeg', 0.88));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('이미지를 열 수 없습니다')); };
+    img.src = url;
+  });
+}
+function editDistance(a, b) {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+// AI 결과 → 입력 화면 형식. 연간공과 제목·기존 강사 이름에 맞춰 보정하고, 확인이 필요한 칸을 표시
+function normalizeOcr(result, fallbackMonth) {
+  const tm = String(result.title || '').match(/(\d{4})\s*년\s*(\d{1,2})\s*월/);
+  const month = tm ? `${tm[1]}-${tm[2].padStart(2, '0')}` : fallbackMonth;
+  const year = Number(month.slice(0, 4));
+  const names = teacherNames();
+  const check = [];
+  const weeks = [];
+  for (const w of result.weeks || []) {
+    const date = parseDateCell(w.date, month);
+    if (!date) continue;
+    const cells = {};
+    const keys = w.youth?.title ? ['kinder', 'elLow', 'elHigh', 'youth'] : ['kinder', 'elLow', 'elHigh', 'middle', 'high'];
+    for (const k of keys) {
+      const raw = w[k]; if (!raw || !(raw.title || raw.teacher)) continue;
+      let title = String(raw.title || '').trim();
+      let unsure = false;
+      // 공과 제목: 연간공과에서 가장 비슷한 제목으로
+      const pool = [year, year - 1].flatMap(y => state.curriculum[y]?.[SRC[k]]?.lessons || []);
+      let best = null;
+      for (const l of pool) { const sc = dice(norm(title), norm(l.title)); if (!best || sc > best.sc) best = { sc, l }; }
+      // AI 오타를 바로잡기 위해 연간공과 제목으로 맞춤 (많이 다르면 노란 표시)
+      if (best && best.sc >= 0.45 && best.sc < 1) { title = best.l.title; if (best.sc < 0.75) unsure = true; }
+      else if (!best || best.sc < 0.45) unsure = Boolean(raw.teacher); // 행사 칸이 아니면 확인 필요
+      // 담당자: 배정표에 있던 이름으로
+      const who = parseWho(String(raw.teacher || '').replace(/\s/g, ''));
+      if (who.teacher) {
+        if (!names.includes(who.teacher)) {
+          const near = names.filter(n => n.length === who.teacher.length && editDistance(n, who.teacher) <= 1);
+          if (near.length === 1) who.teacher = near[0];
+          unsure = true;
+        }
+        who.tag = who.tag.toUpperCase();
+        if (!who.tag) unsure = true;
+      }
+      cells[k] = { title, ...who };
+      if (unsure) check.push(`${date}|${k}`);
+    }
+    if (cells.middle && !cells.high) { cells.youth = cells.middle; delete cells.middle; check.push(`${date}|youth`); }
+    weeks.push({ date, cells });
+  }
+  return { month, weeks: weeks.sort((a, b) => a.date.localeCompare(b.date)), check };
+}
+function markChecks(check) {
+  const set = new Set(check);
+  $$('.edit-week').forEach(el => {
+    const date = $('[data-k=date]', el).value;
+    $$('.edit-cell', el).forEach(c => c.classList.toggle('ai-check', set.has(`${date}|${c.dataset.key}`)));
+  });
+}
+$('#ocrRun').onclick = async () => {
+  const file = $('#ocrFile').files?.[0];
+  if (!file) { $('#ocrMsg').textContent = '배정표 이미지를 먼저 골라 주세요'; return; }
+  const btn = $('#ocrRun'); btn.disabled = true;
+  $('#ocrMsg').textContent = 'AI가 배정표를 읽는 중… (30초 정도 걸릴 수 있어요)';
+  try {
+    const image = await shrinkImage(file);
+    const r = await api('/api/schedule-image', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image }) });
+    const { month, weeks, check } = normalizeOcr(r.result, $('#editMonth').value || todayISO().slice(0, 7));
+    if (!weeks.length) throw new Error('표에서 날짜를 찾지 못했습니다');
+    $('#editMonth').value = month;
+    fillEditor(weeks); markChecks(check);
+    const cells = weeks.reduce((n, w) => n + Object.keys(w.cells).length, 0);
+    $('#ocrMsg').textContent = `${Number(month.slice(5))}월 ${weeks.length}주, ${cells}칸을 읽었습니다. 노란 칸 ${check.length}개를 확인하고 저장하세요`;
+    $('#editMsg').textContent = 'AI로 채움 · 저장 전';
+  } catch (err) { $('#ocrMsg').textContent = `읽지 못했습니다: ${err.message}. 수기 입력이나 엑셀 붙여넣기를 이용하세요`; }
+  btn.disabled = false;
+};
+// 고친 칸은 노란 표시 해제
+$('#editBody').addEventListener('input', e => e.target.closest('.edit-cell')?.classList.remove('ai-check'));
+
 // ---------- 관리자 ----------
 function adminRowsHtml() {
   const a = state.admin;
