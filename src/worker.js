@@ -28,7 +28,13 @@ function validSchedule(s, month) {
     s.weeks.every(w => /^\d{4}-\d{2}-\d{2}$/.test(w.date) && w.cells && typeof w.cells === 'object');
 }
 
-const loadSchedule = async (env, month) => (await env.DATA.get(`schedule:${month}`, 'json')) || SEED[month] || null;
+// KV 저장본과 기본 데이터(data/) 중 더 최근에 고친 쪽을 사용
+const loadSchedule = async (env, month) => {
+  const kv = await env.DATA.get(`schedule:${month}`, 'json');
+  const seed = SEED[month];
+  if (kv && seed) return (seed.updatedAt || 0) > (kv.updatedAt || 0) ? seed : kv;
+  return kv || seed || null;
+};
 
 async function listMonths(env) {
   const months = new Set(Object.keys(SEED));
@@ -74,6 +80,7 @@ async function handleApi(req, env, url, waitUntil = p => p) {
       if (!(await isAdmin(env, session)) && !(env.ADMIN_PASSWORD && canEdit(req, env))) return json({ error: '배정표는 관리자만 수정할 수 있습니다' }, 403);
       let body; try { body = await readBody(req); } catch { return json({ error: '잘못된 JSON' }, 400); }
       if (!validSchedule(body, month)) return json({ error: '배정표 형식이 올바르지 않습니다' }, 400);
+      body.updatedAt = Date.now();
       await env.DATA.put(`schedule:${month}`, JSON.stringify(body));
       return json({ ok: true });
     }

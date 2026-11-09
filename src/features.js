@@ -130,7 +130,7 @@ async function handleSwaps(req, env, path, session, ctx, waitUntil) {
       give = { date: b.giveDate, dept: b.giveDept, title: gcell.title };
     }
     cell.teacher = session.name; cell.tag = myTag;
-    for (const [mon, s] of changed) await env.DATA.put(`schedule:${mon}`, JSON.stringify(s));
+    for (const [mon, s] of changed) { s.updatedAt = Date.now(); await env.DATA.put(`schedule:${mon}`, JSON.stringify(s)); }
     Object.assign(swap, { status: 'accepted', to: { teacher: session.name, tag: myTag, userid: session.userid }, give, doneAt: Date.now() });
     await env.DATA.put(`swap:${swap.id}`, JSON.stringify(swap), { expirationTtl: 60 * 86400 });
     waitUntil(notify(env, rec => norm(rec.teacher) === norm(swap.from.teacher), {

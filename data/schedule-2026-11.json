@@ -1,19 +1,20 @@
 {
   "month": "2026-11",
   "church": "일산교회",
+  "updatedAt": 1794232537622,
   "weeks": [
     {
       "date": "2026-11-01",
       "cells": {
         "kinder": {
           "title": "죽은 나사로를 살리셨어요",
-          "teacher": "유석준",
-          "tag": "B"
+          "teacher": "장세현",
+          "tag": "T"
         },
         "elLow": {
           "title": "예수님을 증거한 베드로",
-          "teacher": "신동하",
-          "tag": "B"
+          "teacher": "최준식",
+          "tag": "T"
         },
         "elHigh": {
           "title": "예수님을 증거한 베드로",
@@ -23,7 +24,7 @@
         "youth": {
           "title": "야곱을 이스라엘로 바꾸시는 하나님",
           "teacher": "양상구",
-          "tag": "p"
+          "tag": "P"
         }
       }
     },
@@ -62,7 +63,7 @@
         },
         "elLow": {
           "title": "변화된 바울",
-          "teacher": "정수영",
+          "teacher": "이진우",
           "tag": "T"
         },
         "elHigh": {
@@ -78,7 +79,7 @@
         "high": {
           "title": "악을 선으로 갚은 요셉",
           "teacher": "이종환",
-          "tag": "p"
+          "tag": "P"
         }
       }
     },
@@ -92,8 +93,8 @@
         },
         "elLow": {
           "title": "고넬료 가족에게 전해진 복음",
-          "teacher": "이진우",
-          "tag": "T"
+          "teacher": "신동하",
+          "tag": "B"
         },
         "elHigh": {
           "title": "고넬료 가족에게 전해진 복음",
@@ -103,7 +104,7 @@
         "middle": {
           "title": "이유를 모르는 고난을 이겨낸 욥",
           "teacher": "김재식",
-          "tag": "e"
+          "tag": "E"
         },
         "high": {
           "title": "이유를 모르는 고난을 이겨낸 욥",
@@ -117,8 +118,8 @@
       "cells": {
         "kinder": {
           "title": "고난 받으신 예수님",
-          "teacher": "장세현",
-          "tag": "T"
+          "teacher": "유석준",
+          "tag": "B"
         },
         "elLow": {
           "title": "이방인에게 복음을 전한 바울",
@@ -127,7 +128,7 @@
         },
         "elHigh": {
           "title": "이방인에게 복음을 전한 바울",
-          "teacher": "최준식",
+          "teacher": "정수영",
           "tag": "T"
         },
         "middle": {
@@ -138,7 +139,7 @@
         "high": {
           "title": "씨 뿌리는 비유",
           "teacher": "박승언",
-          "tag": "p"
+          "tag": "P"
         }
       }
     }
