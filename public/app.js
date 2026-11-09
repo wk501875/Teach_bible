@@ -36,6 +36,7 @@ const ls = {
 const state = {
   user: null, loginAvailable: false, adminLocked: false,
   months: [], schedules: {}, resources: {}, curriculum: {}, curriculumErrors: [],
+  swaps: [], admin: { isAdmin: false, configured: false, admins: [] }, verses: {},
   me: ls.get('teach.me') || '', monthIdx: 0, dept: 'all', day: '', view: 'mine', acks: new Set(), push: { supported: false, on: false, busy: false, msg: '' },
 };
 
@@ -64,6 +65,10 @@ async function api(path, opts = {}) {
 async function loadAll() {
   const [months, resources, status] = await Promise.all([api('/api/schedules'), api('/api/resources'), api('/api/status')]);
   state.months = months; state.resources = resources; state.adminLocked = status.adminLocked;
+  const [swaps, adm] = await Promise.all([api('/api/swaps').catch(() => []), api('/api/admins').catch(() => null)]);
+  state.swaps = swaps; if (adm) state.admin = { isAdmin: adm.isAdmin, configured: adm.configured, admins: adm.admins };
+  $('.nav-btn[data-view=edit]').classList.toggle('hidden', !state.admin.isAdmin);
+  if (!state.admin.isAdmin && state.view === 'edit') show('mine');
   const list = await Promise.all(months.map(m => api(`/api/schedules/${m}`)));
   state.schedules = Object.fromEntries(list.map(s => [s.month, s]));
   const now = new Date();
@@ -216,8 +221,10 @@ function renderMine() {
     <div class="stat"><b>${nextInfo ? nextInfo.mats.length : 0}</b><small>자료</small></div>
   </div>`;
 
+  html += swapRequestsHtml();
   if (next) {
     html += `<p class="section-label">다음 공과</p>${agendaHtml(next, { big: true, flag: next.date === today ? '오늘' : dday(next.date) })}`;
+    html += verseHtml(next);
     const tasks = tasksHtml(next);
     const acked = state.acks.has(next.date);
     html += `<button class="check-row ${acked ? 'done' : ''}" data-ack="${next.date}">
@@ -226,7 +233,7 @@ function renderMine() {
     </button>`;
     html += `<div class="actions">${nextInfo?.sermon ? `<button class="btn dark block" ${matAttrs(nextInfo.sermon)}>공과 말씀 영상 보기</button>` : ''}
       <button class="btn ${nextInfo?.sermon ? '' : 'block'}" ${resAttrs(next)}>메모</button></div>
-      <a class="btn block cal-btn" href="${calUrl(next.date)}">캘린더에 추가 <small>월·토 오전 9시 알림</small></a>`;
+      <div class="actions">${swapButton(next)}<a class="btn cal-btn" href="${calUrl(next.date)}">캘린더에 추가</a></div>`;
     html += `<p class="section-label">자료</p><div class="card"><div class="tasks">${tasks || '<p class="empty">연결된 자료가 없습니다</p>'}</div></div>`;
   } else {
     html += `<div class="card empty">예정된 공과가 없습니다.</div>`;
@@ -272,6 +279,15 @@ $('#mineBody').addEventListener('click', e => {
   const ack = e.target.closest('[data-ack]');
   if (ack) toggleAck(ack.dataset.ack);
 });
+// 교환 버튼은 어느 화면에서든 동작
+document.addEventListener('click', e => {
+  const n = e.target.closest('[data-swap-new]');
+  if (n) { e.stopPropagation(); openSwapNew(n.dataset.date, n.dataset.dept); return; }
+  const t = e.target.closest('[data-swap-take]');
+  if (t) { e.stopPropagation(); openSwapTake(t.dataset.swapTake); return; }
+  const c = e.target.closest('[data-swap-cancel]');
+  if (c) { e.stopPropagation(); cancelSwap(c.dataset.swapCancel); }
+}, true);
 $('#avatarBtn').onclick = () => show('settings');
 
 // ---------- 전국 일정 (배정 전) ----------
@@ -284,7 +300,7 @@ const lastAssignedDate = () => allWeeks().at(-1)?.date || '';
 
 // ---------- 배정표 ----------
 function renderDeptChips() {
-  const opts = [['all', '전체'], ['me', '내 공과'], ['kinder', '유치부'], ['elLow', '초등 1~3'], ['elHigh', '초등 4~6'], ['youth', '중고등부']];
+  const opts = [['all', '전체'], ['me', '내 공과'], ['kinder', '유치부'], ['elLow', '초등 1~3'], ['elHigh', '초등 4~6'], ['youth', '중고등부'], ['stats', '강사 통계']];
   $('#deptChips').innerHTML = opts.map(([k, l]) => `<button class="chip ${state.dept === k ? 'active' : ''}" data-dept-chip="${k}">${l}</button>`).join('');
 }
 $('#deptChips').addEventListener('click', e => {
@@ -299,6 +315,7 @@ function renderTable() {
   const s = state.schedules[month];
   $('#prevMonth').disabled = state.monthIdx <= 0;
   $('#nextMonth').disabled = state.monthIdx >= months.length - 1;
+  if (state.dept === 'stats') return renderStats(month);
   if (!s) return renderNational(month);
   const [y, m] = month.split('-').map(Number);
   $('#tableEyebrow').textContent = '';
@@ -374,7 +391,10 @@ document.addEventListener('click', e => {
   $('#resTitle').textContent = resEditing;
   $('#resSub').textContent = [a.date && fmtLong(a.date), a.dept && deptLabel(a.dept), info && `${info.source} ${info.l.no}과`].filter(Boolean).join(' · ');
   const tasks = a.dept ? tasksHtml(a, false) : '';
-  $('#resAuto').innerHTML = tasks ? `<div class="tasks">${tasks}</div>` : '';
+  const cell = a.dept && allAssignments().find(x => x.date === a.date && x.dept === a.dept);
+  const canSwap = cell && state.me && cell.teacher === state.me && a.date >= todayISO();
+  state.sheetLesson = a.dept ? { ...a } : null;
+  $('#resAuto').innerHTML = (a.dept ? verseHtml(a) : '') + (canSwap ? `<div class="actions">${swapButton(cell)}</div>` : '') + (tasks ? `<div class="tasks">${tasks}</div>` : '');
   $('#resTextbook').value = r.textbook || '';
   $('#resTextbookUrl').value = r.textbookUrl || '';
   $('#resYoutube').value = r.youtube || '';
@@ -449,6 +469,10 @@ function renderEditStats() {
     <div class="stat"><b>${teachers}</b><small>강사</small></div>
     <div class="stat"><b>${linked}</b><small>자료 연결</small></div>`;
 }
+function fillEditor(weeks) {
+  $('#editBody').innerHTML = weeks.map(weekEditor).join('');
+  renderEditStats();
+}
 function renderEditor(month) {
   $('#editMonth').value = month;
   const s = state.schedules[month];
@@ -487,7 +511,7 @@ $('#saveSchedule').onclick = async () => {
   if (!month) { $('#editMsg').textContent = '월을 선택하세요'; return; }
   const schedule = { month, church: $('#editChurch').value.trim(), weeks: readEditor() };
   const headers = { 'Content-Type': 'application/json' };
-  if (state.adminLocked) {
+  if (state.adminLocked && !state.admin.isAdmin) {
     const pw = prompt('관리자 비밀번호'); if (pw === null) return;
     headers['X-Admin-Password'] = pw;
   }
@@ -521,6 +545,7 @@ function renderSettings() {
     ${p.on ? '<span class="sub-actions"><button class="btn small" id="pushTest">테스트 알림 보내기</button></span>' : ''}
     ${!p.on && (p.busy || p.error) && p.diag ? `<small style="display:block;margin-top:6px;font-size:.7rem;color:var(--muted)">${esc(p.diag)}</small>` : ''}</span>
     ${p.supported && state.me ? `<button class="toggle ${p.on ? 'on' : ''}" id="pushToggle" aria-label="공과 알림" ${p.busy ? 'disabled' : ''}></button>` : ''}</div>`);
+  rows.push(adminRowsHtml());
   if (u) rows.push(`<button class="set-row" id="logoutBtn"><span class="txt"><b>로그아웃</b></span><span class="go">${go}</span></button>`);
   if (!u || !names.some(n => n.replace(/\s/g, '') === u.name.replace(/\s/g, ''))) {
     rows.push(`<div class="set-row"><span class="txt"><b>내 이름</b>
@@ -536,6 +561,7 @@ function renderSettings() {
   });
   $('#meSelect')?.addEventListener('change', e => setMe(e.target.value));
   $('#reloadBtn')?.addEventListener('click', () => location.reload());
+  bindAdminRows();
   $('#pushToggle')?.addEventListener('click', togglePush);
   $('#pushTest')?.addEventListener('click', testPush);
 }
@@ -552,6 +578,276 @@ $('#loginForm').addEventListener('submit', async e => {
 });
 
 const calUrl = date => `/api/calendar.ics?teacher=${encodeURIComponent(state.me)}${date ? `&date=${date}` : ''}`;
+
+// ---------- 본문 · 암송 (공과 PDF에서 읽어 서버에 함께 저장) ----------
+const BIBLE_FULL = '창세기 출애굽기 레위기 민수기 신명기 여호수아 사사기 룻기 사무엘상 사무엘하 열왕기상 열왕기하 역대상 역대하 에스라 느헤미야 에스더 욥기 시편 잠언 전도서 아가 이사야 예레미야애가 예레미야 에스겔 다니엘 호세아 요엘 아모스 오바댜 요나 미가 나훔 하박국 스바냐 학개 스가랴 말라기 마태복음 마가복음 누가복음 요한복음 사도행전 로마서 고린도전서 고린도후서 갈라디아서 에베소서 빌립보서 골로새서 데살로니가전서 데살로니가후서 디모데전서 디모데후서 디도서 빌레몬서 히브리서 야고보서 베드로전서 베드로후서 요한일서 요한이서 요한삼서 유다서 요한계시록'.split(' ');
+const BIBLE_ABBR = '창 출 레 민 신 수 삿 룻 삼상 삼하 왕상 왕하 대상 대하 스 느 에 욥 시 잠 전 아 사 렘 애 겔 단 호 욜 암 옵 욘 미 나 합 습 학 슥 말 마 막 눅 요 행 롬 고전 고후 갈 엡 빌 골 살전 살후 딤전 딤후 딛 몬 히 약 벧전 벧후 요일 요이 요삼 유 계'.split(' ');
+const BOOK_RE = [...BIBLE_FULL, ...BIBLE_ABBR].sort((a, b) => b.length - a.length).join('|');
+function parseVerse(text) {
+  const t = text.replace(/\s+/g, ' ');
+  const p1 = t.match(new RegExp(`(${BIBLE_FULL.join('|')})\\s?(\\d+)\\s?장\\s?(\\d+)\\s?절?\\s?[~\\-]\\s?(\\d+)\\s?절`));
+  const p2 = t.match(new RegExp(`(${BOOK_RE})\\s?(\\d+)\\s?:\\s?(\\d+)\\s?[~\\-]\\s?(\\d+)`));
+  const passage = p1 ? `${p1[1]} ${p1[2]}장 ${p1[3]}~${p1[4]}절` : p2 ? `${p2[1]} ${p2[2]}:${p2[3]}~${p2[4]}` : '';
+  const anchors = [...t.matchAll(/암\s?송|마음판에 새기기/g)].map(m => m.index);
+  let best = null;
+  const refRe = new RegExp(`\\(\\s?(${BOOK_RE})\\s?(\\d+)\\s?(?::|장)\\s?(\\d+(?:\\s?[~\\-]\\s?\\d+)?)\\s?절?\\s?\\)`, 'g');
+  if (anchors.length) for (const m of t.matchAll(refRe)) {
+    const d = Math.min(...anchors.map(a => Math.abs(a - m.index)));
+    if (d < 450 && (!best || d < best.d)) best = { m, d };
+  }
+  let verse = '', ref = '';
+  if (best) {
+    const before = t.slice(Math.max(0, best.m.index - 300), best.m.index);
+    verse = before.split(/[.?!”"」\]]\s*|\)\s*/).pop().replace(/(.{3,}?)\1/g, '$1').replace(/^.*말 씀/, '').replace(/^.*새기기/, '').replace(/^[\d\s①-⑳]+/, '').trim();
+    if (verse.length < 8 || /[A-Za-z]{4,}/.test(verse)) verse = '';
+    else ref = `${best.m[1]} ${best.m[2]}:${best.m[3].replace(/\s/g, '')}`;
+  }
+  return { passage, verse, ref };
+}
+// 부서에 맞는 학생 공과 PDF
+function versePdf(a) {
+  const info = lessonInfo(a); if (!info) return '';
+  const pdfs = info.mats.filter(m => m.kind === 'pdf');
+  return (a.dept === 'elHigh' ? pdfs.at(-1) : pdfs[0])?.url || '';
+}
+function verseHtml(a) {
+  const url = versePdf(a); if (!url) return '';
+  const v = state.verses[url];
+  if (v === undefined) ensureVerse(url);
+  if (!v) return `<div class="verse-card loading" data-verse="${esc(url)}">본문·암송 불러오는 중…</div>`;
+  if (!v.passage && !v.verse) return '';
+  return `<div class="verse-card" data-verse="${esc(url)}">
+    ${v.passage ? `<div class="v-row"><span class="v-k">본문</span><span class="v-t">${esc(v.passage)}</span></div>` : ''}
+    ${v.verse ? `<div class="v-row"><span class="v-k">암송</span><span class="v-t">${esc(v.verse)}${v.ref ? ` <em>(${esc(v.ref)})</em>` : ''}</span></div>` : ''}
+  </div>`;
+}
+async function ensureVerse(url) {
+  if (state.verses[url] !== undefined) return;
+  state.verses[url] = null;
+  try {
+    const cached = await api(`/api/verses?urls=${encodeURIComponent(url)}`);
+    if (cached[url]) state.verses[url] = cached[url];
+    else {
+      const res = await fetch(fileUrl(url, 'lesson.pdf'));
+      if (!res.ok) throw new Error('pdf');
+      const [lib, data] = await Promise.all([loadPdfJs(), res.arrayBuffer()]);
+      const pdf = await lib.getDocument({ data }).promise;
+      let text = '';
+      for (let i = 1; i <= Math.min(pdf.numPages, 12); i++) text += (await (await pdf.getPage(i)).getTextContent()).items.map(x => x.str).join('') + '\n';
+      const v = parseVerse(text);
+      state.verses[url] = v;
+      api('/api/verses', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url, ...v }) }).catch(() => {});
+    }
+  } catch { state.verses[url] = { passage: '', verse: '' }; }
+  // 해당 카드만 다시 그림
+  renderMine();
+  if ($('#resDialog').open && state.sheetLesson && versePdf(state.sheetLesson) === url) {
+    const box = $('#resAuto .verse-card'); if (box) box.outerHTML = verseHtml(state.sheetLesson) || '';
+  }
+}
+
+// ---------- 공과 교환 ----------
+const openSwaps = () => state.swaps.filter(x => x.status === 'open' && x.date >= todayISO());
+const swapFor = a => openSwaps().find(x => x.date === a.date && x.dept === a.dept);
+function swapButton(a) {
+  const sw = swapFor(a);
+  return sw ? `<button class="btn" data-swap-cancel="${sw.id}">교환 요청 중 · 취소</button>`
+            : `<button class="btn" data-swap-new data-date="${a.date}" data-dept="${a.dept}">교환 요청</button>`;
+}
+function swapRequestsHtml() {
+  const others = openSwaps().filter(x => x.from.teacher !== state.me);
+  const done = state.swaps.filter(x => x.status === 'accepted' && x.date >= todayISO() && (x.from.teacher === state.me || x.to?.teacher === state.me));
+  let html = '';
+  if (others.length) {
+    html += `<p class="section-label">공과 교환 요청 <span class="count">${others.length}</span></p>`;
+    html += others.map(x => `<div class="swap-card">
+      <div class="when">${fmtDate(x.date)} · ${esc(deptLabel(x.dept))}</div>
+      <div class="title">${esc(x.title)}</div>
+      <div class="meta">${esc(x.from.teacher)} 님${x.note ? ` · “${esc(x.note)}”` : ''}</div>
+      <button class="btn dark small" data-swap-take="${x.id}">제가 맡을게요</button></div>`).join('');
+  }
+  if (done.length) {
+    html += done.map(x => `<div class="swap-note">${x.from.teacher === state.me
+      ? `${esc(x.to.teacher)} 님이 ${md(x.date)} ${esc(deptLabel(x.dept))} 공과를 맡아 주셨어요${x.give ? ` (대신 ${md(x.give.date)} 공과를 맡게 되었어요)` : ''}`
+      : `${md(x.date)} ${esc(deptLabel(x.dept))} 「${esc(x.title)}」을(를) ${esc(x.from.teacher)} 님 대신 맡았어요`}</div>`).join('');
+  }
+  return html;
+}
+let swapCtx = null;
+function openSwapNew(date, dept) {
+  const a = allAssignments().find(x => x.date === date && x.dept === dept);
+  if (!a) return;
+  swapCtx = { mode: 'new', a };
+  $('#swapTitle').textContent = '공과 교환 요청';
+  $('#swapSub').textContent = `${fmtLong(date)} · ${deptLabel(dept)}`;
+  $('#swapBody').innerHTML = `<div class="agenda static"><div class="title">${esc(a.title)}</div></div>
+    <label class="field">남길 말 (선택)<textarea id="swapNote" rows="2" placeholder="예: 그 주 출장이 있어요"></textarea></label>
+    <p class="hint">요청을 올리면 다른 강사님들께 보이고, 알림을 켠 분들께 알림이 갑니다. 누군가 수락하면 배정표가 자동으로 바뀝니다.</p>`;
+  $('#swapSubmit').textContent = '요청 올리기';
+  $('#swapMsg').textContent = '';
+  $('#resDialog').open && $('#resDialog').close();
+  $('#swapDialog').showModal();
+}
+function openSwapTake(id) {
+  const x = state.swaps.find(s => s.id === id); if (!x) return;
+  swapCtx = { mode: 'take', x };
+  const mine = allAssignments().filter(a => a.teacher === state.me && a.date >= todayISO() && a.date !== x.date);
+  $('#swapTitle').textContent = '공과 맡기';
+  $('#swapSub').textContent = `${fmtLong(x.date)} · ${deptLabel(x.dept)} · ${x.from.teacher} 님`;
+  $('#swapBody').innerHTML = `<div class="agenda static"><div class="title">${esc(x.title)}</div>${x.note ? `<div class="meta">“${esc(x.note)}”</div>` : ''}</div>
+    <label class="radio"><input type="radio" name="swapMode" value="cover" checked /> 대신 맡기 <small>이 공과만 제가 맡아요</small></label>
+    <label class="radio ${mine.length ? '' : 'disabled'}"><input type="radio" name="swapMode" value="trade" ${mine.length ? '' : 'disabled'} /> 내 공과와 맞바꾸기 <small>${mine.length ? '제 공과 하나를 대신 드려요' : '맞바꿀 내 공과가 없어요'}</small></label>
+    ${mine.length ? `<select id="swapGive" class="hidden">${mine.map(a => `<option value="${a.date}|${a.dept}">${fmtDate(a.date)} ${esc(deptLabel(a.dept))} · ${esc(a.title)}</option>`).join('')}</select>` : ''}`;
+  $('#swapBody').onchange = () => $('#swapGive')?.classList.toggle('hidden', $('input[name=swapMode]:checked')?.value !== 'trade');
+  $('#swapSubmit').textContent = '맡을게요';
+  $('#swapMsg').textContent = '';
+  $('#swapDialog').showModal();
+}
+$('#swapSubmit').onclick = async () => {
+  if (!swapCtx) return;
+  const btn = $('#swapSubmit'); btn.disabled = true; $('#swapMsg').textContent = '처리 중…';
+  try {
+    if (swapCtx.mode === 'new') {
+      await api('/api/swaps', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: swapCtx.a.date, dept: swapCtx.a.dept, note: $('#swapNote').value.trim() }) });
+    } else {
+      const trade = $('input[name=swapMode]:checked')?.value === 'trade';
+      const [giveDate, giveDept] = trade ? $('#swapGive').value.split('|') : [];
+      await api(`/api/swaps/${swapCtx.x.id}/accept`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(trade ? { giveDate, giveDept } : {}) });
+    }
+    $('#swapDialog').close();
+    await refreshData();
+  } catch (err) { $('#swapMsg').textContent = err.message; }
+  btn.disabled = false;
+};
+async function cancelSwap(id) {
+  if (!confirm('교환 요청을 취소할까요?')) return;
+  try { await api(`/api/swaps/${id}/cancel`, { method: 'POST' }); await refreshData(); } catch (err) { alert(err.message); }
+}
+async function refreshData() {
+  const keepIdx = state.monthIdx;
+  await loadAll(); state.monthIdx = keepIdx;
+  renderAll();
+  if ($('#resDialog').open) $('#resDialog').close();
+}
+
+// ---------- 강사별 통계 ----------
+function renderStats(month) {
+  const year = (month || todayISO()).slice(0, 4);
+  $('#tableEyebrow').textContent = '';
+  $('#tableSub').textContent = `${year}년 강사별 공과`;
+  const today = todayISO();
+  const list = allAssignments().filter(a => a.date.startsWith(year) && a.teacher);
+  const by = new Map();
+  for (const a of list) {
+    const r = by.get(a.teacher) || { name: a.teacher, total: 0, depts: {}, last: '', next: '' };
+    r.total++; const g = deptLabel(a.dept).replace(' (통합)', '').replace('학년', ''); r.depts[g] = (r.depts[g] || 0) + 1;
+    if (a.date < today) r.last = a.date; else if (!r.next) r.next = a.date;
+    by.set(a.teacher, r);
+  }
+  const rows = [...by.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'ko'));
+  const max = Math.max(1, ...rows.map(r => r.total));
+  $('#tableBody').innerHTML = `
+    <div class="stats"><div class="stat"><b>${list.length}</b><small>배정된 공과</small></div><div class="stat"><b>${rows.length}</b><small>강사</small></div><div class="stat"><b>${rows.length ? (list.length / rows.length).toFixed(1) : 0}</b><small>1인 평균</small></div></div>
+    <div class="card"><div class="stat-list">${rows.map(r => `
+      <div class="stat-row ${r.name === state.me ? 'me' : ''}">
+        <div class="sr-top"><b>${esc(r.name)}</b><span class="sr-count">${r.total}회</span></div>
+        <div class="sr-bar"><i style="width:${Math.round(r.total / max * 100)}%"></i></div>
+        <div class="sr-meta">${Object.entries(r.depts).map(([k, n]) => `${esc(k)} ${n}`).join(' · ')}${r.next ? ` · 다음 ${md(r.next)}` : r.last ? ` · 최근 ${md(r.last)}` : ''}</div>
+      </div>`).join('') || '<p class="empty">배정 기록이 없습니다</p>'}</div></div>
+    <p class="hint" style="margin:0 2px">입력된 배정표(${[...new Set(list.map(a => a.date.slice(5, 7)))].map(Number).sort((a, b) => a - b).join(', ')}월) 기준입니다.</p>`;
+}
+
+// ---------- 엑셀 붙여넣기 ----------
+function parseTSV(text) {
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; }
+    else if (ch === '"' && cell === '') q = true;
+    else if (ch === '\t') { row.push(cell); cell = ''; }
+    else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; }
+    else if (ch !== '\r') cell += ch;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(c => c.trim()));
+}
+function parseCellText(v) {
+  const lines = String(v || '').split(/\n/).map(x => x.trim()).filter(Boolean);
+  if (!lines.length) return null;
+  const last = lines.at(-1);
+  if (lines.length >= 2 && /^[가-힣]{2,4}\s?[A-Za-z]?$/.test(last)) return { title: lines.slice(0, -1).join(' '), ...parseWho(last) };
+  const m = last.match(/^(.*\S)\s+([가-힣]{2,4}[A-Za-z])$/); // 한 줄에 "제목 이름B"
+  if (lines.length === 1 && m) return { title: m[1], ...parseWho(m[2]) };
+  return { title: lines.join(' '), teacher: '', tag: '' };
+}
+function parseDateCell(v, month) {
+  const t = String(v || '').trim(); const y = Number(month.slice(0, 4));
+  let m = t.match(/(\d{4})[.\-/년]\s?(\d{1,2})[.\-/월]\s?(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = t.match(/(\d{1,2})\s?[./월]\s?(\d{1,2})/);
+  if (m) return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  return '';
+}
+function pasteToWeeks(text, month) {
+  let rows = parseTSV(text);
+  // 빈 열(배정표 가운데 여백) 제거
+  const width = Math.max(...rows.map(r => r.length));
+  const keep = [...Array(width).keys()].filter(i => rows.some(r => (r[i] || '').trim()));
+  rows = rows.map(r => keep.map(i => r[i] || ''));
+  let cols = ['date', 'kinder', 'elLow', 'elHigh', 'middle', 'high'];
+  const head = rows.findIndex(r => r.some(c => /유치/.test(c)) && r.some(c => /중등|고등/.test(c)));
+  if (head >= 0) {
+    cols = rows[head].map(c => /일자|날짜|주일/.test(c) ? 'date' : /유치/.test(c) ? 'kinder' : /1\s*[~\-]\s*3/.test(c) ? 'elLow' : /4\s*[~\-]\s*6/.test(c) ? 'elHigh' : /중등/.test(c) ? 'middle' : /고등/.test(c) ? 'high' : '');
+    if (!cols.includes('date')) cols[0] = 'date';
+    rows = rows.slice(head + 1);
+  }
+  const weeks = [];
+  for (const r of rows) {
+    const rec = {}; cols.forEach((k, i) => { if (k) rec[k] = r[i]; });
+    const date = parseDateCell(rec.date, month);
+    if (!date) continue;
+    const cells = {};
+    for (const k of ['kinder', 'elLow', 'elHigh', 'middle', 'high']) { const c = parseCellText(rec[k]); if (c) cells[k] = c; }
+    if (cells.middle && !cells.high) { cells.youth = cells.middle; delete cells.middle; } // 병합된 중고등 칸
+    weeks.push({ date, cells });
+  }
+  return weeks.sort((a, b) => a.date.localeCompare(b.date));
+}
+$('#pasteApply').onclick = () => {
+  const text = $('#pasteBox').value;
+  if (!text.trim()) { $('#pasteMsg').textContent = '엑셀에서 표를 복사해 붙여넣어 주세요'; return; }
+  const weeks = pasteToWeeks(text, $('#editMonth').value || todayISO().slice(0, 7));
+  if (!weeks.length) { $('#pasteMsg').textContent = '날짜가 있는 줄을 찾지 못했습니다. 일자 열까지 함께 복사해 주세요'; return; }
+  const mon = weeks[0].date.slice(0, 7);
+  if (mon !== $('#editMonth').value) $('#editMonth').value = mon;
+  fillEditor(weeks);
+  const cells = weeks.reduce((n, w) => n + Object.keys(w.cells).length, 0);
+  $('#pasteMsg').textContent = `${weeks.length}주, ${cells}칸을 채웠습니다. 확인한 뒤 저장하세요`;
+  $('#editMsg').textContent = '붙여넣기로 채움 · 저장 전';
+};
+
+// ---------- 관리자 ----------
+function adminRowsHtml() {
+  const a = state.admin;
+  if (!a.configured) return `<div class="set-row"><span class="txt"><b>관리자 지정</b><small>아직 관리자가 없어 누구나 배정표를 수정할 수 있습니다. 나를 관리자로 지정하면 관리자만 수정할 수 있어요</small>
+    <span class="sub-actions"><button class="btn small dark" id="adminClaim">나를 관리자로 지정</button></span></span></div>`;
+  if (!a.isAdmin) return '';
+  return `<div class="set-row"><span class="txt"><b>관리자</b><small>배정표 입력은 관리자만 할 수 있습니다</small>
+    <span class="admin-list">${a.admins.map(id => `<span class="admin-chip">${esc(id)}${id === state.user?.userid ? ' (나)' : ''}<button data-admin-del="${esc(id)}" aria-label="삭제">${svg('close')}</button></span>`).join('')}</span>
+    <span class="sub-actions"><input id="adminNew" placeholder="깨사모 아이디" autocapitalize="off" /><button class="btn small" id="adminAdd">추가</button></span>
+    <small id="adminMsg"></small></span></div>`;
+}
+function bindAdminRows() {
+  const post = async (method, userid) => {
+    try { const r = await api('/api/admins', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userid }) }); state.admin = { ...state.admin, admins: r.admins, configured: r.admins.length > 0, isAdmin: r.admins.includes(state.user?.userid) }; }
+    catch (err) { alert(err.message); }
+    $('.nav-btn[data-view=edit]').classList.toggle('hidden', !state.admin.isAdmin);
+    renderSettings();
+  };
+  $('#adminClaim')?.addEventListener('click', () => post('POST', state.user?.userid));
+  $('#adminAdd')?.addEventListener('click', () => { const v = $('#adminNew').value.trim(); if (v) post('POST', v); });
+  $$('[data-admin-del]').forEach(b => b.addEventListener('click', () => { if (confirm(`${b.dataset.adminDel} 관리자를 삭제할까요?`)) post('DELETE', b.dataset.adminDel); }));
+}
 
 // ---------- 공과 알림 · 준비 확인 ----------
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);

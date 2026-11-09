@@ -91,6 +91,12 @@
       </div>
     </div>
     <div class="stats" id="editStats"></div>
+    <div class="card card-pad paste-card">
+      <b>엑셀에서 붙여넣기</b>
+      <p class="hint">배정표 엑셀에서 일자부터 고등부까지 표 전체를 복사해 아래에 붙여넣으세요. 칸이 자동으로 채워집니다.</p>
+      <textarea id="pasteBox" rows="3" placeholder="여기에 붙여넣기"></textarea>
+      <div class="actions"><span class="msg" id="pasteMsg"></span><div class="spacer"></div><button class="btn small dark" id="pasteApply">표로 채우기</button></div>
+    </div>
     <div class="card card-pad">
       <div class="row">
         <label class="field">월
@@ -157,6 +163,20 @@
         <div class="spacer"></div>
         <button class="btn dark" id="resSave">저장</button>
       </div>
+    </div>
+  </dialog>
+
+  <!-- 공과 교환 -->
+  <dialog id="swapDialog" class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-head">
+      <div class="sheet-title"><h2 id="swapTitle">공과 교환</h2><p id="swapSub"></p></div>
+      <form method="dialog"><button class="close-btn" aria-label="닫기" data-icon="close"></button></form>
+    </div>
+    <div class="sheet-body">
+      <div id="swapBody"></div>
+      <button class="btn dark block" id="swapSubmit">확인</button>
+      <p class="msg center" id="swapMsg"></p>
     </div>
   </dialog>
 

@@ -3,6 +3,7 @@ import { getSchedule, SOURCES } from './jbch-school.js';
 import { handleAuth, getSession } from './auth.js';
 import { handlePush, runDailyReminders } from './push.js';
 import { handleCalendar } from './calendar.js';
+import { handleFeatures, isAdmin } from './features.js';
 import seed202610 from '../data/schedule-2026-10.json';
 import seed202611 from '../data/schedule-2026-11.json';
 import seed202612 from '../data/schedule-2026-12.json';
@@ -40,7 +41,7 @@ async function listMonths(env) {
   return [...months].sort();
 }
 
-async function handleApi(req, env, url) {
+async function handleApi(req, env, url, waitUntil = p => p) {
   const path = url.pathname;
 
   const auth = await handleAuth(req, env, path);
@@ -51,7 +52,11 @@ async function handleApi(req, env, url) {
   }
 
   // 여기부터는 깨사모 로그인한 사람만
-  if (!(await getSession(req, env))) return json({ error: '로그인이 필요합니다', needLogin: true }, 401);
+  const session = await getSession(req, env);
+  if (!session) return json({ error: '로그인이 필요합니다', needLogin: true }, 401);
+
+  const feat = await handleFeatures(req, env, path, url, session, { loadSchedule, listMonths }, waitUntil);
+  if (feat) return feat;
 
   const push = await handlePush(req, env, path, url);
   if (push) return push;
@@ -66,7 +71,7 @@ async function handleApi(req, env, url) {
       return data ? json(data) : json({ error: '배정표 없음' }, 404);
     }
     if (req.method === 'PUT') {
-      if (!canEdit(req, env)) return json({ error: '관리자 비밀번호가 틀렸습니다' }, 401);
+      if (!(await isAdmin(env, session)) && !(env.ADMIN_PASSWORD && canEdit(req, env))) return json({ error: '배정표는 관리자만 수정할 수 있습니다' }, 403);
       let body; try { body = await readBody(req); } catch { return json({ error: '잘못된 JSON' }, 400); }
       if (!validSchedule(body, month)) return json({ error: '배정표 형식이 올바르지 않습니다' }, 400);
       await env.DATA.put(`schedule:${month}`, JSON.stringify(body));
@@ -160,10 +165,10 @@ async function proxyFile(req, url) {
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url);
     if (url.pathname.startsWith('/api/')) {
-      try { return await handleApi(req, env, url); }
+      try { return await handleApi(req, env, url, p => ctx.waitUntil(p)); }
       catch (err) { return json({ error: err.message }, 500); }
     }
     return env.ASSETS.fetch(req);
